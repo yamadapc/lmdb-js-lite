@@ -1,8 +1,8 @@
 use std::path::Path;
-use std::rc::Rc;
-use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use crossbeam::channel::Sender;
 use heed::{Env, RoTxn, RwTxn};
 use heed::EnvFlags;
 use heed::EnvOpenOptions;
@@ -27,72 +27,77 @@ impl Drop for DatabaseWriterHandle {
   }
 }
 
-pub fn start_make_database_writer(options: LMDBOptions) -> anyhow::Result<DatabaseWriterHandle> {
-  let (tx, rx) = std::sync::mpsc::channel();
-  let writer = DatabaseWriter::new(options)?;
+pub fn start_make_database_writer(
+  options: LMDBOptions,
+) -> anyhow::Result<(DatabaseWriterHandle, Arc<DatabaseWriter>)> {
+  let (tx, rx) = crossbeam::channel::unbounded();
+  let writer = Arc::new(DatabaseWriter::new(options)?);
 
-  let thread_handle = std::thread::spawn(move || {
-    tracing::debug!("Starting database writer thread");
-    let mut current_transaction: Option<RwTxn> = None;
-    while let Ok(msg) = rx.recv() {
-      match msg {
-        DatabaseWriterMessage::Get { key, resolve } => {
-          tracing::debug!(%key, "Handling get message");
-          let run = || {
-            if let Some(txn) = &current_transaction {
-              let result = writer.get(&*txn, &key)?;
-              Ok(result)
-            } else {
-              let txn = writer.environment.read_txn()?;
-              let result = writer.get(&txn, &key)?;
-              txn.commit()?;
-              Ok(result)
+  let thread_handle = std::thread::spawn({
+    let writer = writer.clone();
+    move || {
+      tracing::debug!("Starting database writer thread");
+      let mut current_transaction: Option<RwTxn> = None;
+      while let Ok(msg) = rx.recv() {
+        match msg {
+          DatabaseWriterMessage::Get { key, resolve } => {
+            tracing::trace!(%key, "Handling get message");
+            let run = || {
+              if let Some(txn) = &current_transaction {
+                let result = writer.get(&*txn, &key)?;
+                Ok(result)
+              } else {
+                let txn = writer.environment.read_txn()?;
+                let result = writer.get(&txn, &key)?;
+                txn.commit()?;
+                Ok(result)
+              }
+            };
+            let result = run();
+            resolve(result);
+          }
+          DatabaseWriterMessage::Put {
+            value,
+            resolve,
+            key,
+          } => {
+            tracing::trace!(%key, "Handling put message");
+            let mut run = || {
+              if let Some(txn) = &mut current_transaction {
+                let result = writer.put(txn, &key, &value)?;
+                Ok(result)
+              } else {
+                let mut txn = writer.environment.write_txn()?;
+                let result = writer.put(&mut txn, &key, &value)?;
+                txn.commit()?;
+                Ok(result)
+              }
+            };
+            let result = run();
+            resolve(result);
+          }
+          DatabaseWriterMessage::Stop => {
+            tracing::debug!("Stopping writer thread");
+            break;
+          }
+          DatabaseWriterMessage::StartTransaction { resolve } => {
+            let mut run = || {
+              current_transaction = Some(writer.environment.write_txn()?);
+              Ok(())
+            };
+            resolve(run())
+          }
+          DatabaseWriterMessage::CommitTransaction { resolve } => {
+            if let Some(txn) = current_transaction.take() {
+              resolve(txn.commit().map_err(|err| anyhow::Error::from(err)))
             }
-          };
-          let result = run();
-          resolve(result);
-        }
-        DatabaseWriterMessage::Put {
-          value,
-          resolve,
-          key,
-        } => {
-          tracing::debug!(%key, "Handling put message");
-          let mut run = || {
-            if let Some(txn) = &mut current_transaction {
-              let result = writer.put(txn, &key, &value)?;
-              Ok(result)
-            } else {
-              let mut txn = writer.environment.write_txn()?;
-              let result = writer.put(&mut txn, &key, &value)?;
-              txn.commit()?;
-              Ok(result)
-            }
-          };
-          let result = run();
-          resolve(result);
-        }
-        DatabaseWriterMessage::Stop => {
-          tracing::debug!("Stopping writer thread");
-          break;
-        }
-        DatabaseWriterMessage::StartTransaction { resolve } => {
-          let mut run = || {
-            current_transaction = Some(writer.environment.write_txn()?);
-            Ok(())
-          };
-          resolve(run())
-        }
-        DatabaseWriterMessage::CommitTransaction { resolve } => {
-          if let Some(txn) = current_transaction.take() {
-            resolve(txn.commit().map_err(|err| anyhow::Error::from(err)))
           }
         }
       }
     }
   });
 
-  Ok(DatabaseWriterHandle { tx, thread_handle })
+  Ok((DatabaseWriterHandle { tx, thread_handle }, writer))
 }
 
 pub enum DatabaseWriterMessage {
@@ -114,21 +119,9 @@ pub enum DatabaseWriterMessage {
   Stop,
 }
 
-pub enum TransactionOperation {
-  Get {
-    key: String,
-    resolve: Box<dyn FnOnce(anyhow::Result<Option<Vec<u8>>>) + Send>,
-  },
-  Put {
-    key: String,
-    value: Vec<u8>,
-    resolve: Box<dyn FnOnce(anyhow::Result<()>) + Send>,
-  },
-}
-
 pub struct DatabaseWriter {
-  environment: Env,
-  database: heed::Database<Str, Bytes>,
+  pub environment: Env,
+  pub database: heed::Database<Str, Bytes>,
 }
 
 impl DatabaseWriter {

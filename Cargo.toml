@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 anyhow = "1.0.86"
 heed = "0.20.3"
 napi = { version = "2.12.2", default-features = false, features = ["napi4", "tokio"] }
+crossbeam = "0.8.4"
 napi-derive = "2.12.2"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"

@@ -12,6 +12,7 @@ export type LMDB = Lmdb
 export declare class Lmdb {
   constructor(options: LmdbOptions)
   get(key: string): Promise<Buffer | null | undefined>
+  getSync(key: string): Buffer | null
   put(key: string, data: Buffer): Promise<void>
   startTransaction(): Promise<void>
   commitTransaction(): Promise<void>

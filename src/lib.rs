@@ -1,6 +1,7 @@
 #![deny(clippy::all)]
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use napi::bindgen_prelude::Buffer;
@@ -9,7 +10,7 @@ use napi_derive::napi;
 use tracing::Level;
 
 use crate::writer::{
-  DatabaseWriterHandle, DatabaseWriterMessage, start_make_database_writer, TransactionOperation,
+  DatabaseWriter, DatabaseWriterHandle, DatabaseWriterMessage, start_make_database_writer,
 };
 use crate::writer::LMDBOptions;
 
@@ -28,22 +29,22 @@ pub fn init_tracing_subscriber() {
 
 #[napi]
 pub struct LMDB {
-  inner: Option<Rc<DatabaseWriterHandle>>,
+  inner: Option<(Rc<DatabaseWriterHandle>, Arc<DatabaseWriter>)>,
 }
 
 #[napi]
 impl LMDB {
   #[napi(constructor)]
   pub fn new(options: LMDBOptions) -> napi::Result<Self> {
-    let database_wrapper = start_make_database_writer(options).map_err(napi_error)?;
+    let (database_wrapper, writer) = start_make_database_writer(options).map_err(napi_error)?;
     Ok(Self {
-      inner: Some(Rc::new(database_wrapper)),
+      inner: Some((Rc::new(database_wrapper), writer)),
     })
   }
 
   #[napi(ts_return_type = "Promise<Buffer | null | undefined>")]
   pub fn get(&self, env: Env, key: String) -> napi::Result<napi::JsObject> {
-    let inner = self.get_database()?;
+    let (inner, _) = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     inner
@@ -62,9 +63,23 @@ impl LMDB {
     Ok(promise)
   }
 
+  #[napi]
+  pub fn get_sync(&self, key: String) -> napi::Result<Option<Buffer>> {
+    let (_, database) = self.get_database()?;
+
+    let txn = database
+      .environment
+      .read_txn()
+      .map_err(|err| napi_error(anyhow!(err)))?;
+    let buffer = database
+      .get(&txn, &key)
+      .map_err(|err| napi_error(anyhow!(err)))?;
+    Ok(buffer.map(|data| Buffer::from(data)))
+  }
+
   #[napi(ts_return_type = "Promise<void>")]
   pub fn put(&self, env: Env, key: String, data: Buffer) -> napi::Result<napi::JsObject> {
-    let inner = self.get_database()?;
+    let (inner, _) = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     inner
@@ -81,7 +96,7 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn start_transaction(&self, env: Env) -> napi::Result<napi::JsObject> {
-    let inner = self.get_database()?;
+    let (inner, _) = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     inner
@@ -96,7 +111,7 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn commit_transaction(&self, env: Env) -> napi::Result<napi::JsObject> {
-    let inner = self.get_database()?;
+    let (inner, _) = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     inner
@@ -116,7 +131,7 @@ impl LMDB {
 }
 
 impl LMDB {
-  fn get_database(&self) -> napi::Result<&Rc<DatabaseWriterHandle>> {
+  fn get_database(&self) -> napi::Result<&(Rc<DatabaseWriterHandle>, Arc<DatabaseWriter>)> {
     let inner = self
       .inner
       .as_ref()
