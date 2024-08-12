@@ -22,7 +22,7 @@ describe("lmdb", () => {
   let db: Lmdb | null = null;
   const asyncWrites = true;
   const compression = false;
-  const numEntriesToTest = 20000;
+  const numEntriesToTest = 100000;
 
   afterEach(() => {
     db?.close();
