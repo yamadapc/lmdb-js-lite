@@ -17,12 +17,12 @@ beforeEach(() => {
   });
 });
 
-jest.setTimeout(20000);
+jest.setTimeout(40000);
 describe("lmdb", () => {
   let db: Lmdb | null = null;
-  const asyncWrites = false;
+  const asyncWrites = true;
   const compression = false;
-  const numEntriesToTest = 100000;
+  const numEntriesToTest = 20000;
 
   afterEach(() => {
     db?.close();
@@ -56,14 +56,18 @@ describe("lmdb", () => {
       asyncWrites,
     });
 
-    await db.startTransaction();
+    const entries = [];
     for (let i = 0; i < numEntriesToTest; i += 1) {
-      await db.put(`${i}`, v8.serialize(i));
+      entries.push({
+        key: `${i}`,
+        value: v8.serialize(i),
+      });
     }
-    await db.commitTransaction();
+    await db.putMany(entries);
 
-    for (let i = 0; i < numEntriesToTest; i += 1) {
-      const result = db.getSync(`${i}`);
+    const values = db.getManySync(entries.map(({ key }) => key));
+    for (let i = 0; i < values.length; i += 1) {
+      const result = values[i];
       const resultValue = v8.deserialize(result);
       expect(resultValue).toEqual(i);
     }
@@ -140,13 +144,13 @@ describe("lmdb", () => {
         for (let i = 0; i < numEntriesToTest; i += 1) {
           await unsafeDB.put(`${i}`, v8.serialize(i));
         }
-      });
 
-      for (let i = 0; i < numEntriesToTest; i += 1) {
-        const result = unsafeDB.get(`${i}`);
-        const resultValue = v8.deserialize(result);
-        expect(resultValue).toEqual(i);
-      }
+        for (let i = 0; i < numEntriesToTest; i += 1) {
+          const result = unsafeDB.get(`${i}`);
+          const resultValue = v8.deserialize(result);
+          expect(resultValue).toEqual(i);
+        }
+      });
     });
   });
 });

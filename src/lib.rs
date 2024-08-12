@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 
+use std::fmt::Debug;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -16,8 +17,8 @@ use crate::writer::LMDBOptions;
 
 mod writer;
 
-fn napi_error(err: anyhow::Error) -> napi::Error {
-  napi::Error::from_reason(format!("[napi] {err}"))
+fn napi_error(err: impl Debug) -> napi::Error {
+  napi::Error::from_reason(format!("[napi] {err:?}"))
 }
 
 #[napi]
@@ -25,6 +26,12 @@ pub fn init_tracing_subscriber() {
   let _ = tracing_subscriber::FmtSubscriber::builder()
     .with_max_level(Level::DEBUG)
     .try_init();
+}
+
+#[napi(object)]
+pub struct Entry {
+  pub key: String,
+  pub value: Buffer,
 }
 
 #[napi]
@@ -73,8 +80,46 @@ impl LMDB {
       .map_err(|err| napi_error(anyhow!(err)))?;
     let buffer = database
       .get(&txn, &key)
+      .map_err(|err| napi_error(anyhow!(err)))?
+      .map(|data| Buffer::from(data));
+    Ok(buffer)
+  }
+
+  #[napi]
+  pub fn get_many_sync(&self, keys: Vec<String>) -> napi::Result<Vec<Option<Buffer>>> {
+    let (_, database) = self.get_database()?;
+
+    let mut results = vec![];
+    let txn = database
+      .environment
+      .read_txn()
       .map_err(|err| napi_error(anyhow!(err)))?;
-    Ok(buffer.map(|data| Buffer::from(data)))
+
+    for key in keys {
+      let buffer = database
+        .get(&txn, &key)
+        .map_err(|err| napi_error(anyhow!(err)))?
+        .map(|data| Buffer::from(data));
+      results.push(buffer);
+    }
+
+    Ok(results)
+  }
+
+  #[napi(ts_return_type = "Promise<void>")]
+  pub fn put_many(&self, env: Env, entries: Vec<Entry>) -> napi::Result<napi::JsObject> {
+    let (inner, _) = self.get_database()?;
+    let (deferred, promise) = env.create_deferred()?;
+
+    inner
+      .tx
+      .send(DatabaseWriterMessage::PutMany {
+        entries,
+        resolve: Box::new(|_| deferred.resolve(|_| Ok(()))),
+      })
+      .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
+
+    Ok(promise)
   }
 
   #[napi(ts_return_type = "Promise<void>")]

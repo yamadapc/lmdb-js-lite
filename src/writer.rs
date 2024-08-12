@@ -9,6 +9,16 @@ use heed::EnvOpenOptions;
 use heed::types::{Bytes, Str};
 use napi_derive::napi;
 
+use crate::Entry;
+
+#[derive(thiserror::Error, Debug)]
+pub enum DatabaseWriterError {
+  #[error("heed error: {0}")]
+  HeedError(#[from] heed::Error),
+  #[error("IO error: {0}")]
+  IOError(#[from] std::io::Error),
+}
+
 #[napi(object)]
 pub struct LMDBOptions {
   pub path: String,
@@ -29,7 +39,7 @@ impl Drop for DatabaseWriterHandle {
 
 pub fn start_make_database_writer(
   options: LMDBOptions,
-) -> anyhow::Result<(DatabaseWriterHandle, Arc<DatabaseWriter>)> {
+) -> Result<(DatabaseWriterHandle, Arc<DatabaseWriter>), DatabaseWriterError> {
   let (tx, rx) = crossbeam::channel::unbounded();
   let writer = Arc::new(DatabaseWriter::new(options)?);
 
@@ -89,8 +99,27 @@ pub fn start_make_database_writer(
           }
           DatabaseWriterMessage::CommitTransaction { resolve } => {
             if let Some(txn) = current_transaction.take() {
-              resolve(txn.commit().map_err(|err| anyhow::Error::from(err)))
+              resolve(txn.commit().map_err(|err| DatabaseWriterError::from(err)))
             }
+          }
+          DatabaseWriterMessage::PutMany { entries, resolve } => {
+            let run = || {
+              if let Some(txn) = &mut current_transaction {
+                for Entry { key, value } in entries {
+                  writer.put(txn, &key, &value)?;
+                }
+                Ok(())
+              } else {
+                let mut txn = writer.environment.write_txn()?;
+                for Entry { key, value } in entries {
+                  writer.put(&mut txn, &key, &value)?;
+                }
+                txn.commit()?;
+                Ok(())
+              }
+            };
+            let result = run();
+            resolve(result);
           }
         }
       }
@@ -103,18 +132,22 @@ pub fn start_make_database_writer(
 pub enum DatabaseWriterMessage {
   Get {
     key: String,
-    resolve: Box<dyn FnOnce(anyhow::Result<Option<Vec<u8>>>) + Send>,
+    resolve: Box<dyn FnOnce(Result<Option<Vec<u8>>, DatabaseWriterError>) + Send>,
   },
   Put {
     key: String,
     value: Vec<u8>,
-    resolve: Box<dyn FnOnce(anyhow::Result<()>) + Send>,
+    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
+  },
+  PutMany {
+    entries: Vec<Entry>,
+    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
   },
   StartTransaction {
-    resolve: Box<dyn FnOnce(anyhow::Result<()>) + Send>,
+    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
   },
   CommitTransaction {
-    resolve: Box<dyn FnOnce(anyhow::Result<()>) + Send>,
+    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
   },
   Stop,
 }
@@ -125,7 +158,7 @@ pub struct DatabaseWriter {
 }
 
 impl DatabaseWriter {
-  pub fn new(options: LMDBOptions) -> anyhow::Result<Self> {
+  pub fn new(options: LMDBOptions) -> Result<Self, DatabaseWriterError> {
     let path = Path::new(&options.path);
     std::fs::create_dir_all(path)?;
     let environment = unsafe {
@@ -133,6 +166,7 @@ impl DatabaseWriter {
       flags.set(EnvFlags::MAP_ASYNC, options.async_writes);
       flags.set(EnvFlags::NO_SYNC, options.async_writes);
       flags.set(EnvFlags::NO_META_SYNC, options.async_writes);
+      flags.set(EnvFlags::NO_LOCK, true);
       EnvOpenOptions::new()
         // http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5
         // 10GB max DB size that will be memory mapped
@@ -150,12 +184,12 @@ impl DatabaseWriter {
     })
   }
 
-  pub fn get(&self, txn: &RoTxn, key: &str) -> anyhow::Result<Option<Vec<u8>>> {
+  pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>, DatabaseWriterError> {
     let result = self.database.get(&txn, key)?;
     Ok(result.map(|d| d.to_owned()))
   }
 
-  pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> anyhow::Result<()> {
+  pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<(), DatabaseWriterError> {
     self.database.put(txn, key, data)?;
     Ok(())
   }
