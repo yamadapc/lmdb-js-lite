@@ -7,7 +7,7 @@ export interface LmdbOptions {
   path: string
   asyncWrites: boolean
 }
-export declare function initTracingSubscriber(): void
+function initTracingSubscriber(): void
 export interface Entry {
   key: string
   value: Buffer
@@ -16,11 +16,14 @@ export type LMDB = Lmdb
 export declare class Lmdb {
   constructor(options: LmdbOptions)
   get(key: string): Promise<Buffer | null | undefined>
-  getSync(key: string): Buffer | null
+  getSync(key: string): ArrayBuffer | null
   getManySync(keys: Array<string>): Array<Buffer | undefined | null>
   putMany(entries: Array<Entry>): Promise<void>
   put(key: string, data: Buffer): Promise<void>
-  startTransaction(): Promise<void>
-  commitTransaction(): Promise<void>
+  putNoConfirm(key: string, data: Buffer): void
+  startReadTransaction(): void
+  commitReadTransaction(): void
+  startWriteTransaction(): Promise<void>
+  commitWriteTransaction(): Promise<void>
   close(): void
 }

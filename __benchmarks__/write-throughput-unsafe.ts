@@ -64,7 +64,7 @@ async function main() {
     });
     const duration = Date.now() - start;
     const throughput = numEntriesInserted / duration;
-    console.log("Throughput:", throughput, "entries / second");
+    console.log("Unsafe Throughput:", throughput, "entries / second");
   }
 }
 

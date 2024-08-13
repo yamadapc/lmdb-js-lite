@@ -48,10 +48,10 @@ pub fn start_make_database_writer(
     move || {
       tracing::debug!("Starting database writer thread");
       let mut current_transaction: Option<RwTxn> = None;
+
       while let Ok(msg) = rx.recv() {
         match msg {
           DatabaseWriterMessage::Get { key, resolve } => {
-            tracing::trace!(%key, "Handling get message");
             let run = || {
               if let Some(txn) = &current_transaction {
                 let result = writer.get(&*txn, &key)?;
@@ -71,7 +71,6 @@ pub fn start_make_database_writer(
             resolve,
             key,
           } => {
-            tracing::trace!(%key, "Handling put message");
             let mut run = || {
               if let Some(txn) = &mut current_transaction {
                 let result = writer.put(txn, &key, &value)?;
@@ -165,6 +164,8 @@ impl DatabaseWriter {
       let mut flags = EnvFlags::empty();
       flags.set(EnvFlags::MAP_ASYNC, options.async_writes);
       flags.set(EnvFlags::NO_SYNC, options.async_writes);
+      flags.set(EnvFlags::WRITE_MAP, true);
+      flags.set(EnvFlags::NO_READ_AHEAD, false);
       flags.set(EnvFlags::NO_META_SYNC, options.async_writes);
       EnvOpenOptions::new()
         // http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5

@@ -80,11 +80,11 @@ describe("lmdb", () => {
         asyncWrites,
       });
 
-      await db.startTransaction();
+      await db.startWriteTransaction();
       for (let i = 0; i < numEntriesToTest; i += 1) {
         await db.put(`${i}`, v8.serialize(i));
       }
-      await db.commitTransaction();
+      await db.commitWriteTransaction();
     });
 
     afterEach(() => {
