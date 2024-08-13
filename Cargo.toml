@@ -3,8 +3,12 @@ edition = "2021"
 name = "lmdb-js-safe"
 version = "0.0.0"
 
+[[bench]]
+name = "lmdb_js_safe_benchmark"
+harness = false
+
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 anyhow = "1.0.86"
@@ -15,6 +19,9 @@ napi-derive = "2.12.2"
 thiserror = "1.0.63"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+
+[dev-dependencies]
+criterion = "0.5.1"
 
 [build-dependencies]
 napi-build = "2.0.1"

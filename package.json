@@ -28,10 +28,12 @@
     "@napi-rs/cli": "^2.18.4",
     "@types/jest": "^29.5.12",
     "@types/node": "^22.2.0",
+    "bench-node": "^0.0.1-beta.0",
     "jest": "^29.7.0",
     "lmdb": "^3.0.13",
     "prettier": "^3.3.3",
     "ts-jest": "^29.2.4",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   },
   "engines": {

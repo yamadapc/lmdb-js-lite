@@ -15,7 +15,7 @@ use crate::writer::{
 };
 use crate::writer::LMDBOptions;
 
-mod writer;
+pub mod writer;
 
 fn napi_error(err: impl Debug) -> napi::Error {
   napi::Error::from_reason(format!("[napi] {err:?}"))

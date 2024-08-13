@@ -166,7 +166,6 @@ impl DatabaseWriter {
       flags.set(EnvFlags::MAP_ASYNC, options.async_writes);
       flags.set(EnvFlags::NO_SYNC, options.async_writes);
       flags.set(EnvFlags::NO_META_SYNC, options.async_writes);
-      flags.set(EnvFlags::NO_LOCK, true);
       EnvOpenOptions::new()
         // http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5
         // 10GB max DB size that will be memory mapped
