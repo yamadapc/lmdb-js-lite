@@ -102,7 +102,7 @@ describe("lmdb", () => {
     it("read many entries, synchronous, no transaction", async () => {
       for (let i = 0; i < numEntriesToTest; i += 1) {
         const result = db.getSync(`${i}`);
-        const resultValue = v8.deserialize(result);
+        const resultValue = v8.deserialize(new Uint8Array(result));
         expect(resultValue).toEqual(i);
       }
     });
