@@ -26,6 +26,7 @@ async function main() {
   const unsafeDB = openLMDBUnsafe({
     path: "./databases/unsafe",
     compression: false,
+    encoding: "binary",
     eventTurnBatching: true,
   });
 
