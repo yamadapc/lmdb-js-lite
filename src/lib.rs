@@ -63,7 +63,6 @@ impl LMDB {
     let (deferred, promise) = env.create_deferred()?;
 
     inner
-      .tx
       .send(DatabaseWriterMessage::Get {
         key,
         resolve: Box::new(|value| {
@@ -83,7 +82,7 @@ impl LMDB {
     let (_, database) = self.get_database()?;
 
     if let Some(txn) = &self.read_transaction {
-      let buffer = database.database.get(txn, &key);
+      let buffer = database.get(txn, &key);
       let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
         return Ok(env.get_null()?.into_unknown());
       };
@@ -92,10 +91,9 @@ impl LMDB {
       Ok(result.into_unknown())
     } else {
       let txn = database
-        .environment
         .read_txn()
         .map_err(|err| napi_error(anyhow!(err)))?;
-      let buffer = database.database.get(&txn, &key);
+      let buffer = database.get(&txn, &key);
       let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
         return Ok(env.get_null()?.into_unknown());
       };
@@ -111,7 +109,6 @@ impl LMDB {
 
     let mut results = vec![];
     let txn = database
-      .environment
       .read_txn()
       .map_err(|err| napi_error(anyhow!(err)))?;
 
@@ -138,7 +135,6 @@ impl LMDB {
       }),
     };
     inner
-      .tx
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -159,7 +155,6 @@ impl LMDB {
       }),
     };
     inner
-      .tx
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -176,7 +171,6 @@ impl LMDB {
       resolve: Box::new(|_| {}),
     };
     inner
-      .tx
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -190,8 +184,6 @@ impl LMDB {
     }
     let (_, database) = self.get_database()?;
     let txn = database
-      .environment
-      .clone()
       .static_read_txn()
       .map_err(|err| napi_error(anyhow!(err)))?;
     self.read_transaction = Some(txn);
@@ -217,7 +209,6 @@ impl LMDB {
       resolve: Box::new(|_| deferred.resolve(|_| Ok(()))),
     };
     inner
-      .tx
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -233,7 +224,6 @@ impl LMDB {
       resolve: Box::new(|_| deferred.resolve(|_| Ok(()))),
     };
     inner
-      .tx
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 

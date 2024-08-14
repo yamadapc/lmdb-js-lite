@@ -29,9 +29,18 @@ pub struct LMDBOptions {
 }
 
 pub struct DatabaseWriterHandle {
-  pub tx: Sender<DatabaseWriterMessage>,
+  tx: Sender<DatabaseWriterMessage>,
   #[allow(unused)]
   thread_handle: JoinHandle<()>,
+}
+
+impl DatabaseWriterHandle {
+  pub fn send(
+    &self,
+    message: DatabaseWriterMessage,
+  ) -> std::result::Result<(), crossbeam::channel::SendError<DatabaseWriterMessage>> {
+    self.tx.send(message)
+  }
 }
 
 impl Drop for DatabaseWriterHandle {
@@ -57,17 +66,17 @@ pub fn start_make_database_writer(
           DatabaseWriterMessage::Get { key, resolve } => {
             let run = || {
               if let Some(txn) = &current_transaction {
-                let result = writer.get(txn, &key)?;
+                let result = writer.get(txn, &key)?.map(|d| d.to_owned());
                 Ok(result)
               } else {
                 let txn = writer.environment.read_txn()?;
-                let result = writer.get(&txn, &key)?;
+                let result = writer.get(&txn, &key)?.map(|d| d.to_owned());
                 txn.commit()?;
                 Ok(result)
               }
             };
             let result = run();
-            resolve(result);
+            resolve(result.map(|o| o.map(|d| d.to_owned())));
           }
           DatabaseWriterMessage::Put {
             value,
@@ -157,8 +166,8 @@ pub enum DatabaseWriterMessage {
 }
 
 pub struct DatabaseWriter {
-  pub environment: Env,
-  pub database: heed::Database<Str, Bytes>,
+  environment: Env,
+  database: heed::Database<Str, Bytes>,
 }
 
 impl DatabaseWriter {
@@ -191,13 +200,21 @@ impl DatabaseWriter {
     })
   }
 
-  pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
+  pub fn get<'a>(&self, txn: &'a RoTxn, key: &str) -> Result<Option<&'a [u8]>> {
     let result = self.database.get(txn, key)?;
-    Ok(result.map(|d| d.to_owned()))
+    Ok(result)
   }
 
   pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
     self.database.put(txn, key, data)?;
     Ok(())
+  }
+
+  pub fn read_txn(&self) -> heed::Result<RoTxn> {
+    self.environment.read_txn()
+  }
+
+  pub fn static_read_txn(&self) -> heed::Result<RoTxn<'static>> {
+    self.environment.clone().static_read_txn()
   }
 }
