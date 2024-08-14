@@ -58,5 +58,5 @@ function openDB(directory, openOptions) {
 
 exports.open = openDB;
 exports.default = {
-  open,
+  open: openDB,
 };
