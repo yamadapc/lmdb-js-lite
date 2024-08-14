@@ -10,6 +10,7 @@ beforeAll(() => {
 beforeEach(() => {
   rmSync("./databases", {
     recursive: true,
+    maxRetries: 10,
     force: true,
   });
   mkdirSync("./databases", {
