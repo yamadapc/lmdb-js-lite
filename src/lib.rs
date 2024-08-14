@@ -267,6 +267,7 @@ mod test {
         .unwrap()
         .to_string(),
       async_writes: false,
+      map_size: None,
     };
     let mut lmdb = LMDB::new(options).unwrap();
     lmdb.close();
