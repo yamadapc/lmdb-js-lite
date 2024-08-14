@@ -6,6 +6,7 @@
 export interface LmdbOptions {
   path: string
   asyncWrites: boolean
+  mapSize?: number
 }
 function initTracingSubscriber(): void
 export interface Entry {

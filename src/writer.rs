@@ -23,6 +23,7 @@ pub enum DatabaseWriterError {
 pub struct LMDBOptions {
   pub path: String,
   pub async_writes: bool,
+  pub map_size: Option<u32>,
 }
 
 pub struct DatabaseWriterHandle {
@@ -167,12 +168,14 @@ impl DatabaseWriter {
       flags.set(EnvFlags::WRITE_MAP, true);
       flags.set(EnvFlags::NO_READ_AHEAD, false);
       flags.set(EnvFlags::NO_META_SYNC, options.async_writes);
-      EnvOpenOptions::new()
-        // http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5
-        // 10GB max DB size that will be memory mapped
-        .map_size(40 * 1024 * 1024 * 1024)
-        .flags(flags)
-        .open(path)
+      let mut env_open_options = EnvOpenOptions::new();
+      env_open_options.flags(flags);
+      // http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5
+      // max DB size that will be memory mapped
+      if let Some(map_size) = options.map_size {
+        env_open_options.map_size(map_size as usize);
+      }
+      env_open_options.open(path)
     }?;
     let mut write_txn = environment.write_txn()?;
     let database = environment.create_database(&mut write_txn, None)?;
