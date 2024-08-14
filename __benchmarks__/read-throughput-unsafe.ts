@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { Lmdb } from "../index";
 import { mkdirSync, rmSync } from "node:fs";
 import { open as openLMDBUnsafe } from "lmdb";
 
