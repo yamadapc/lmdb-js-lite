@@ -28,6 +28,7 @@ class LmdbWrapper {
    */
   get(key) {
     const value = this.#lmdb.getSync(key);
+    if (value == null) return value;
     return new Uint8Array(value);
   }
 
