@@ -35,6 +35,9 @@ class LmdbWrapper {
    * @param {Buffer} value
    */
   put(key, value) {
+    if (typeof value === "string") {
+      value = Buffer.from(value);
+    }
     this.#lmdb.put(key, value);
   }
 
@@ -51,7 +54,7 @@ function openDB(directory, openOptions) {
     new Lmdb({
       path: directory,
       asyncWrites: false,
-      mapSize: 1024 * 1024 * 1024 * 20,
+      mapSize: 1024 * 1024 * 1024 * 50,
     }),
   );
 }

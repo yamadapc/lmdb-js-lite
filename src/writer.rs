@@ -1,3 +1,4 @@
+use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -200,13 +201,27 @@ impl DatabaseWriter {
     })
   }
 
-  pub fn get<'a>(&self, txn: &'a RoTxn, key: &str) -> Result<Option<&'a [u8]>> {
-    let result = self.database.get(txn, key)?;
-    Ok(result)
+  pub fn get<'a>(&self, txn: &'a RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
+    if let Some(result) = self.database.get(txn, key)? {
+      let mut decompressor = lz4::Decoder::new(result)?;
+      let mut output_buffer = vec![];
+      decompressor.read_to_end(&mut output_buffer)?;
+      let (_, result) = decompressor.finish();
+      result?;
+      Ok(Some(output_buffer))
+    } else {
+      Ok(None)
+    }
   }
 
   pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
-    self.database.put(txn, key, data)?;
+    let buffer = vec![];
+    let mut compressor = lz4::EncoderBuilder::new().build(buffer)?;
+    compressor.write_all(data)?;
+    let (compressed_data, result) = compressor.finish();
+    result?;
+
+    self.database.put(txn, key, &compressed_data)?;
     Ok(())
   }
 

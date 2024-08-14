@@ -87,7 +87,7 @@ impl LMDB {
         return Ok(env.get_null()?.into_unknown());
       };
       let mut result = env.create_arraybuffer(buffer.len())?;
-      result.deref_mut().copy_from_slice(buffer);
+      result.deref_mut().copy_from_slice(&buffer);
       Ok(result.into_unknown())
     } else {
       let txn = database
@@ -98,7 +98,7 @@ impl LMDB {
         return Ok(env.get_null()?.into_unknown());
       };
       let mut result = env.create_arraybuffer(buffer.len())?;
-      result.deref_mut().copy_from_slice(buffer);
+      result.deref_mut().copy_from_slice(&buffer);
       Ok(result.into_unknown())
     }
   }
