@@ -1,4 +1,5 @@
 // @ts-check
+const v8 = require("node:v8");
 const { Lmdb } = require("./index");
 
 /**
@@ -36,7 +37,7 @@ class LmdbWrapper {
    */
   put(key, value) {
     if (typeof value === "string") {
-      value = Buffer.from(value);
+      value = Buffer.from(v8.serialize(value));
     }
     this.#lmdb.put(key, value);
   }
