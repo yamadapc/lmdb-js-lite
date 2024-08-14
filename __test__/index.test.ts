@@ -23,6 +23,7 @@ describe("lmdb", () => {
   const asyncWrites = true;
   const compression = false;
   const numEntriesToTest = 100000;
+  const MAP_SIZE = 1024 * 1024 * 1024;
 
   afterEach(() => {
     db?.close();
@@ -32,6 +33,7 @@ describe("lmdb", () => {
     db = new Lmdb({
       path: "./databases/test.db",
       asyncWrites,
+      mapSize: MAP_SIZE,
     });
     db.close();
     db = null;
@@ -41,6 +43,7 @@ describe("lmdb", () => {
     db = new Lmdb({
       path: "./databases/test.db",
       asyncWrites,
+      mapSize: MAP_SIZE,
     });
     const value = Math.random().toString();
     await db.put("key", v8.serialize(value));
@@ -54,6 +57,7 @@ describe("lmdb", () => {
     db = new Lmdb({
       path: "./databases/test.db",
       asyncWrites,
+      mapSize: MAP_SIZE,
     });
 
     const entries = [];
@@ -78,6 +82,7 @@ describe("lmdb", () => {
       db = new Lmdb({
         path: "./databases/test.db",
         asyncWrites,
+        mapSize: MAP_SIZE,
       });
 
       await db.startWriteTransaction();

@@ -11,6 +11,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     DatabaseWriter::new(LMDBOptions {
       path: "benchmark-databases/test.db".to_string(),
       async_writes: false,
+      map_size: Some(1024 * 1024 * 1024 * 10),
     })
     .unwrap()
   };

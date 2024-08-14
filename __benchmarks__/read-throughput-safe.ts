@@ -6,6 +6,7 @@ const KEY_SIZE = 64;
 const ENTRY_SIZE = 1024 * 10; // 10KB
 const MAX_TIME = 10000;
 const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
+const MAP_SIZE = 1024 * 1024 * 1024 * 10;
 
 let key = 0;
 function generateEntry() {
@@ -26,6 +27,7 @@ async function main() {
   const safeDB = new Lmdb({
     path: "./databases/unsafe",
     asyncWrites: false,
+    mapSize: MAP_SIZE,
   });
 
   console.log("Generating entries for testing");

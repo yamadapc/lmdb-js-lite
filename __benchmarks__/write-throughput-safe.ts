@@ -5,6 +5,7 @@ import { mkdirSync, rmSync } from "node:fs";
 const KEY_SIZE = 64;
 const ENTRY_SIZE = 64; // 64 bytes
 const MAX_TIME = 10000;
+const MAP_SIZE = 1024 * 1024 * 1024 * 10;
 
 function generateEntry() {
   return {
@@ -24,6 +25,7 @@ async function main() {
   const safeDB = new Lmdb({
     path: "./databases/unsafe",
     asyncWrites: false,
+    mapSize: MAP_SIZE,
   });
 
   {
