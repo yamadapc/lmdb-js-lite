@@ -249,6 +249,7 @@ impl LMDB {
 #[cfg(test)]
 mod test {
   use std::env::temp_dir;
+  use std::sync::mpsc::channel;
 
   use super::*;
 
@@ -265,5 +266,50 @@ mod test {
     };
     let mut lmdb = LMDB::new(options).unwrap();
     lmdb.close();
+  }
+
+  #[test]
+  fn consistency_test() {
+    let options = LMDBOptions {
+      path: temp_dir()
+        .join("lmdb-cache-tests.db")
+        .to_str()
+        .unwrap()
+        .to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+    let (write, read) = start_make_database_writer(options).unwrap();
+
+    write
+      .send(DatabaseWriterMessage::StartTransaction {
+        resolve: Box::new(|_| {}),
+      })
+      .unwrap();
+    write
+      .send(DatabaseWriterMessage::Put {
+        key: String::from("key"),
+        value: vec![1, 2, 3, 4],
+        resolve: Box::new(|_| {}),
+      })
+      .unwrap();
+
+    // If we don't commit the reader will not see the writes.
+    //
+    // However, the reader can see the writes from this transaction from the background regardless
+    // of when the read transaction started.
+    let (tx, rx) = channel();
+    write
+      .send(DatabaseWriterMessage::CommitTransaction {
+        resolve: Box::new(move |_| {
+          tx.send(()).unwrap();
+        }),
+      })
+      .unwrap();
+    rx.recv().unwrap();
+
+    let read_txn = read.read_txn().unwrap();
+    let value = read.get(&read_txn, "key").unwrap().unwrap();
+    assert_eq!(value, [1, 2, 3, 4]);
   }
 }
