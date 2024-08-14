@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "lmdb-js-safe"
+name = "lmdb-js-lite"
 version = "0.0.0"
 
 [[bench]]

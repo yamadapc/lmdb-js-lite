@@ -2672,9 +2672,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lmdb-js-safe@workspace:.":
+"lmdb-js-lite@workspace:.":
   version: 0.0.0-use.local
-  resolution: "lmdb-js-safe@workspace:."
+  resolution: "lmdb-js-lite@workspace:."
   dependencies:
     "@napi-rs/cli": "npm:^2.18.4"
     "@types/jest": "npm:^29.5.12"

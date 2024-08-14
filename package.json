@@ -1,10 +1,10 @@
 {
-  "name": "lmdb-js-safe",
+  "name": "lmdb-js-lite",
   "version": "0.0.0",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
-    "name": "lmdb-js-safe",
+    "name": "lmdb-js-lite",
     "triples": {
       "additional": [
         "aarch64-apple-darwin",

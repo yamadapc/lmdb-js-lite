@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-linux-arm-musleabihf",
+  "name": "lmdb-js-lite-linux-arm-musleabihf",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "lmdb-js-safe.linux-arm-musleabihf.node",
+  "main": "lmdb-js-lite.linux-arm-musleabihf.node",
   "files": [
-    "lmdb-js-safe.linux-arm-musleabihf.node"
+    "lmdb-js-lite.linux-arm-musleabihf.node"
   ],
   "license": "MIT",
   "engines": {

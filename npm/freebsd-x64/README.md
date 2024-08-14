@@ -1,3 +1,3 @@
-# `lmdb-js-safe-freebsd-x64`
+# `lmdb-js-lite-freebsd-x64`
 
-This is the **x86_64-unknown-freebsd** binary for `lmdb-js-safe`
+This is the **x86_64-unknown-freebsd** binary for `lmdb-js-lite`

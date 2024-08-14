@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-win32-x64-msvc",
+  "name": "lmdb-js-lite-win32-x64-msvc",
   "version": "0.0.0",
   "os": [
     "win32"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "lmdb-js-safe.win32-x64-msvc.node",
+  "main": "lmdb-js-lite.win32-x64-msvc.node",
   "files": [
-    "lmdb-js-safe.win32-x64-msvc.node"
+    "lmdb-js-lite.win32-x64-msvc.node"
   ],
   "license": "MIT",
   "engines": {

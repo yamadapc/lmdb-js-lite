@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-linux-arm-gnueabihf",
+  "name": "lmdb-js-lite-linux-arm-gnueabihf",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "lmdb-js-safe.linux-arm-gnueabihf.node",
+  "main": "lmdb-js-lite.linux-arm-gnueabihf.node",
   "files": [
-    "lmdb-js-safe.linux-arm-gnueabihf.node"
+    "lmdb-js-lite.linux-arm-gnueabihf.node"
   ],
   "license": "MIT",
   "engines": {

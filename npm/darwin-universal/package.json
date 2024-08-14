@@ -1,12 +1,12 @@
 {
-  "name": "lmdb-js-safe-darwin-universal",
+  "name": "lmdb-js-lite-darwin-universal",
   "version": "0.0.0",
   "os": [
     "darwin"
   ],
-  "main": "lmdb-js-safe.darwin-universal.node",
+  "main": "lmdb-js-lite.darwin-universal.node",
   "files": [
-    "lmdb-js-safe.darwin-universal.node"
+    "lmdb-js-lite.darwin-universal.node"
   ],
   "license": "MIT",
   "engines": {

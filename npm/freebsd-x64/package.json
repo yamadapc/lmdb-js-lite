@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-freebsd-x64",
+  "name": "lmdb-js-lite-freebsd-x64",
   "version": "0.0.0",
   "os": [
     "freebsd"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "lmdb-js-safe.freebsd-x64.node",
+  "main": "lmdb-js-lite.freebsd-x64.node",
   "files": [
-    "lmdb-js-safe.freebsd-x64.node"
+    "lmdb-js-lite.freebsd-x64.node"
   ],
   "license": "MIT",
   "engines": {

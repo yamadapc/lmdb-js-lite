@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-android-arm-eabi",
+  "name": "lmdb-js-lite-android-arm-eabi",
   "version": "0.0.0",
   "os": [
     "android"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "lmdb-js-safe.android-arm-eabi.node",
+  "main": "lmdb-js-lite.android-arm-eabi.node",
   "files": [
-    "lmdb-js-safe.android-arm-eabi.node"
+    "lmdb-js-lite.android-arm-eabi.node"
   ],
   "license": "MIT",
   "engines": {

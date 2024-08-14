@@ -1,5 +1,5 @@
 {
-  "name": "lmdb-js-safe-linux-arm64-gnu",
+  "name": "lmdb-js-lite-linux-arm64-gnu",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm64"
   ],
-  "main": "lmdb-js-safe.linux-arm64-gnu.node",
+  "main": "lmdb-js-lite.linux-arm64-gnu.node",
   "files": [
-    "lmdb-js-safe.linux-arm64-gnu.node"
+    "lmdb-js-lite.linux-arm64-gnu.node"
   ],
   "license": "MIT",
   "engines": {
