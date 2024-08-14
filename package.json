@@ -1,8 +1,8 @@
 {
   "name": "lmdb-js-lite",
   "version": "0.0.0",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "compat.js",
+  "types": "compat.d.ts",
   "napi": {
     "name": "lmdb-js-lite",
     "triples": {
