@@ -11,7 +11,7 @@
   "napi": {
     "name": "lmdb-js-lite",
     "triples": {
-      "default": false,
+      "defaults": false,
       "additional": [
         "x86_64-apple-darwin",
         "x86_64-unknown-linux-gnu",
