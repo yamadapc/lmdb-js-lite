@@ -1,5 +1,5 @@
 import { initTracingSubscriber, Lmdb } from "../index.js";
-import { open as openLMDBUnsafe, type Database as UnsafeDatabase } from "lmdb";
+import { type Database as UnsafeDatabase, open as openLMDBUnsafe } from "lmdb";
 import * as v8 from "node:v8";
 import { mkdirSync, rmSync } from "node:fs";
 
@@ -46,12 +46,20 @@ describe("lmdb", () => {
       asyncWrites,
       mapSize: MAP_SIZE,
     });
-    const value = Math.random().toString();
-    await db.put("key", v8.serialize(value));
-    const result = await db.get("key");
-    const resultValue = v8.deserialize(result);
 
-    expect(value).toEqual(resultValue);
+    {
+      const value = Math.random().toString();
+      await db.put("key", v8.serialize(value));
+      const result = await db.get("key");
+      const resultValue = v8.deserialize(result);
+      expect(value).toEqual(resultValue);
+    }
+    {
+      await db.put("key", v8.serialize({ myObject: "here", something: true }));
+      const result = await db.get("key");
+      const resultValue = v8.deserialize(result);
+      expect(resultValue).toEqual({ myObject: "here", something: true });
+    }
   });
 
   it("read and write many entries", async () => {
