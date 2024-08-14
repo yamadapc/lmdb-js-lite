@@ -3,9 +3,7 @@
   "version": "0.0.1-2",
   "main": "compat.js",
   "types": "compat.d.ts",
-  "repository": {
-    "url": "https://github.com/yamadapc/lmdb-js-lite"
-  },
+  "repository": "https://github.com/yamadapc/lmdb-js-lite",
   "napi": {
     "name": "lmdb-js-lite",
     "triples": {

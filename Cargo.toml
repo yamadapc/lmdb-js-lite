@@ -2,6 +2,7 @@
 edition = "2021"
 name = "lmdb-js-lite"
 version = "0.0.0"
+repository = "https://github.com/yamadapc/lmdb-js-lite"
 
 [[bench]]
 name = "lmdb_js_safe_benchmark"
