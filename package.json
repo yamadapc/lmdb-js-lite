@@ -1,9 +1,13 @@
 {
   "name": "lmdb-js-lite",
-  "version": "0.0.1-5",
+  "version": "0.0.1-6",
   "main": "compat.js",
   "types": "compat.d.ts",
   "repository": "https://github.com/yamadapc/lmdb-js-lite",
+  "os": [
+    "darwin",
+    "linux"
+  ],
   "napi": {
     "name": "lmdb-js-lite",
     "triples": {
