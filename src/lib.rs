@@ -6,7 +6,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use napi::bindgen_prelude::Buffer;
 use napi::bindgen_prelude::Env;
 use napi::JsUnknown;
 use napi_derive::napi;
@@ -18,6 +17,11 @@ use crate::writer::{
 use crate::writer::LMDBOptions;
 
 pub mod writer;
+
+#[cfg(not(test))]
+type Buffer = napi::bindgen_prelude::Buffer;
+#[cfg(test)]
+type Buffer = Vec<u8>;
 
 fn napi_error(err: impl Debug) -> napi::Error {
   napi::Error::from_reason(format!("[napi] {err:?}"))

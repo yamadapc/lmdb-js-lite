@@ -2,7 +2,7 @@ use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use lmdb_js_safe::writer::{DatabaseWriter, LMDBOptions};
+use lmdb_js_lite::writer::{DatabaseWriter, LMDBOptions};
 
 fn criterion_benchmark(c: &mut Criterion) {
   let input = {
@@ -11,7 +11,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     DatabaseWriter::new(LMDBOptions {
       path: "benchmark-databases/test.db".to_string(),
       async_writes: false,
-      map_size: Some(1024 * 1024 * 1024 * 10),
+      map_size: Some(1024 * 1024 * 1024),
     })
     .unwrap()
   };
