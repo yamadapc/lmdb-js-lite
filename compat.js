@@ -46,7 +46,7 @@ class LmdbWrapper {
  * @param {DBOpenOptions} openOptions
  * @returns {LmdbWrapper}
  */
-exports.openDB = function openDB(directory, openOptions) {
+function openDB(directory, openOptions) {
   return new LmdbWrapper(
     new Lmdb({
       path: directory,
@@ -54,4 +54,9 @@ exports.openDB = function openDB(directory, openOptions) {
       mapSize: 1024 * 1024 * 1024 * 20,
     }),
   );
+}
+
+exports.openDB = openDB;
+exports.default = {
+  openDB,
 };
