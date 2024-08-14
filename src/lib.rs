@@ -69,7 +69,7 @@ impl LMDB {
         resolve: Box::new(|value| {
           deferred.resolve(|_| {
             let value = value.map_err(napi_error)?;
-            Ok(value.map(|buffer| Buffer::from(buffer)))
+            Ok(value.map(Buffer::from))
           })
         }),
       })
@@ -83,7 +83,7 @@ impl LMDB {
     let (_, database) = self.get_database()?;
 
     if let Some(txn) = &self.read_transaction {
-      let buffer = database.database.get(&txn, &key);
+      let buffer = database.database.get(txn, &key);
       let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
         return Ok(env.get_null()?.into_unknown());
       };
@@ -119,7 +119,7 @@ impl LMDB {
       let buffer = database
         .get(&txn, &key)
         .map_err(|err| napi_error(anyhow!(err)))?
-        .map(|data| Buffer::from(data));
+        .map(Buffer::from);
       results.push(buffer);
     }
 

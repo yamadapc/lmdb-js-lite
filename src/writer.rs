@@ -11,6 +11,8 @@ use napi_derive::napi;
 
 use crate::Entry;
 
+type Result<R> = std::result::Result<R, DatabaseWriterError>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseWriterError {
   #[error("heed error: {0}")]
@@ -40,7 +42,7 @@ impl Drop for DatabaseWriterHandle {
 
 pub fn start_make_database_writer(
   options: LMDBOptions,
-) -> Result<(DatabaseWriterHandle, Arc<DatabaseWriter>), DatabaseWriterError> {
+) -> Result<(DatabaseWriterHandle, Arc<DatabaseWriter>)> {
   let (tx, rx) = crossbeam::channel::unbounded();
   let writer = Arc::new(DatabaseWriter::new(options)?);
 
@@ -55,7 +57,7 @@ pub fn start_make_database_writer(
           DatabaseWriterMessage::Get { key, resolve } => {
             let run = || {
               if let Some(txn) = &current_transaction {
-                let result = writer.get(&*txn, &key)?;
+                let result = writer.get(txn, &key)?;
                 Ok(result)
               } else {
                 let txn = writer.environment.read_txn()?;
@@ -74,13 +76,13 @@ pub fn start_make_database_writer(
           } => {
             let mut run = || {
               if let Some(txn) = &mut current_transaction {
-                let result = writer.put(txn, &key, &value)?;
-                Ok(result)
+                writer.put(txn, &key, &value)?;
+                Ok(())
               } else {
                 let mut txn = writer.environment.write_txn()?;
-                let result = writer.put(&mut txn, &key, &value)?;
+                writer.put(&mut txn, &key, &value)?;
                 txn.commit()?;
-                Ok(result)
+                Ok(())
               }
             };
             let result = run();
@@ -99,7 +101,7 @@ pub fn start_make_database_writer(
           }
           DatabaseWriterMessage::CommitTransaction { resolve } => {
             if let Some(txn) = current_transaction.take() {
-              resolve(txn.commit().map_err(|err| DatabaseWriterError::from(err)))
+              resolve(txn.commit().map_err(DatabaseWriterError::from))
             }
           }
           DatabaseWriterMessage::PutMany { entries, resolve } => {
@@ -129,25 +131,27 @@ pub fn start_make_database_writer(
   Ok((DatabaseWriterHandle { tx, thread_handle }, writer))
 }
 
+type ResolveCallback<T> = Box<dyn FnOnce(Result<T>) + Send>;
+
 pub enum DatabaseWriterMessage {
   Get {
     key: String,
-    resolve: Box<dyn FnOnce(Result<Option<Vec<u8>>, DatabaseWriterError>) + Send>,
+    resolve: ResolveCallback<Option<Vec<u8>>>,
   },
   Put {
     key: String,
     value: Vec<u8>,
-    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
+    resolve: ResolveCallback<()>,
   },
   PutMany {
     entries: Vec<Entry>,
-    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
+    resolve: ResolveCallback<()>,
   },
   StartTransaction {
-    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
+    resolve: ResolveCallback<()>,
   },
   CommitTransaction {
-    resolve: Box<dyn FnOnce(Result<(), DatabaseWriterError>) + Send>,
+    resolve: ResolveCallback<()>,
   },
   Stop,
 }
@@ -158,7 +162,7 @@ pub struct DatabaseWriter {
 }
 
 impl DatabaseWriter {
-  pub fn new(options: LMDBOptions) -> Result<Self, DatabaseWriterError> {
+  pub fn new(options: LMDBOptions) -> Result<Self> {
     let path = Path::new(&options.path);
     std::fs::create_dir_all(path)?;
     let environment = unsafe {
@@ -187,12 +191,12 @@ impl DatabaseWriter {
     })
   }
 
-  pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>, DatabaseWriterError> {
-    let result = self.database.get(&txn, key)?;
+  pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
+    let result = self.database.get(txn, key)?;
     Ok(result.map(|d| d.to_owned()))
   }
 
-  pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<(), DatabaseWriterError> {
+  pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
     self.database.put(txn, key, data)?;
     Ok(())
   }

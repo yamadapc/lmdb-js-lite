@@ -1,5 +1,6 @@
 {
   "name": "lmdb-js-lite-darwin-x64",
+  "repository": "https://github.com/yamadapc/lmdb-js-lite",
   "version": "0.0.0",
   "os": [
     "darwin"

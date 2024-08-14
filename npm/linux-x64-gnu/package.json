@@ -1,5 +1,6 @@
 {
   "name": "lmdb-js-lite-linux-x64-gnu",
+  "repository": "https://github.com/yamadapc/lmdb-js-lite",
   "version": "0.0.0",
   "os": [
     "linux"
