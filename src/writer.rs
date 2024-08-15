@@ -221,7 +221,7 @@ impl DatabaseWriter {
 
   pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
     if let Some(result) = self.database.get(txn, key)? {
-      let output_buffer = lz4_flex::block::decompress(result, result.len())?;
+      let output_buffer = lz4_flex::block::decompress_size_prepended(result)?;
       Ok(Some(output_buffer))
     } else {
       Ok(None)
@@ -229,7 +229,7 @@ impl DatabaseWriter {
   }
 
   pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
-    let compressed_data = lz4_flex::block::compress(data);
+    let compressed_data = lz4_flex::block::compress_prepend_size(data);
     self.database.put(txn, key, &compressed_data)?;
     Ok(())
   }
