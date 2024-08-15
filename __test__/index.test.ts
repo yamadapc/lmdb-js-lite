@@ -51,13 +51,13 @@ describe("lmdb", () => {
       const value = Math.random().toString();
       await db.put("key", v8.serialize(value));
       const result = await db.get("key");
-      const resultValue = v8.deserialize(result);
+      const resultValue = result && v8.deserialize(result);
       expect(value).toEqual(resultValue);
     }
     {
       await db.put("key", v8.serialize({ myObject: "here", something: true }));
       const result = await db.get("key");
-      const resultValue = v8.deserialize(result);
+      const resultValue = result && v8.deserialize(result);
       expect(resultValue).toEqual({ myObject: "here", something: true });
     }
   });
@@ -81,7 +81,7 @@ describe("lmdb", () => {
     const values = db.getManySync(entries.map(({ key }) => key));
     for (let i = 0; i < values.length; i += 1) {
       const result = values[i];
-      const resultValue = v8.deserialize(result);
+      const resultValue = result != null && v8.deserialize(result);
       expect(resultValue).toEqual(i);
     }
   });
@@ -102,21 +102,21 @@ describe("lmdb", () => {
     });
 
     afterEach(() => {
-      db.close();
+      db?.close();
     });
 
     it("read many entries, no transaction", async () => {
       for (let i = 0; i < numEntriesToTest; i += 1) {
-        const result = await db.get(`${i}`);
-        const resultValue = v8.deserialize(result);
+        const result = await db?.get(`${i}`);
+        const resultValue = result && v8.deserialize(result);
         expect(resultValue).toEqual(i);
       }
     });
 
     it("read many entries, synchronous, no transaction", async () => {
       for (let i = 0; i < numEntriesToTest; i += 1) {
-        const result = db.getSync(`${i}`);
-        const resultValue = v8.deserialize(result);
+        const result = db?.getSync(`${i}`);
+        const resultValue = result && v8.deserialize(result);
         expect(resultValue).toEqual(i);
       }
     });
@@ -132,14 +132,14 @@ describe("lmdb", () => {
 
         await unsafeDB.transaction(async () => {
           for (let i = 0; i < numEntriesToTest; i += 1) {
-            await unsafeDB.put(`${i}`, v8.serialize(i));
+            await unsafeDB?.put(`${i}`, v8.serialize(i));
           }
         });
       }, 40000);
 
       it("read many entries", () => {
         for (let i = 0; i < numEntriesToTest; i += 1) {
-          const result = unsafeDB.get(`${i}`);
+          const result = unsafeDB?.get(`${i}`);
           const resultValue = v8.deserialize(result);
           expect(resultValue).toEqual(i);
         }

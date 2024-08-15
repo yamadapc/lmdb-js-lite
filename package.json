@@ -1,7 +1,7 @@
 {
   "name": "lmdb-js-lite",
   "version": "0.0.1-9",
-  "main": "compat.js",
+  "main": "compat.ts",
   "types": "compat.d.ts",
   "repository": "https://github.com/yamadapc/lmdb-js-lite",
   "os": [
@@ -23,8 +23,12 @@
   "license": "MIT",
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",
+    "@parcel/cache": "*",
+    "@parcel/core": "*",
+    "@parcel/fs": "*",
+    "@parcel/types": "*",
     "@types/jest": "^29.5.12",
-    "@types/node": "^22.2.0",
+    "@types/node": "^22.3.0",
     "bench-node": "^0.0.1-beta.0",
     "jest": "^29.7.0",
     "lmdb": "^3.0.13",
@@ -44,6 +48,12 @@
     "test": "jest",
     "universal": "napi universal",
     "version": "napi version"
+  },
+  "peerDependencies": {
+    "@parcel/cache": "*",
+    "@parcel/core": "*",
+    "@parcel/fs": "*",
+    "@parcel/types": "*"
   },
   "packageManager": "yarn@4.4.0",
   "stableVersion": "0.0.0"
