@@ -5,6 +5,7 @@ import { mkdirSync, rmSync } from "node:fs";
 const KEY_SIZE = 64;
 const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
+const ASYNC_WRITES = true;
 const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
 const MAP_SIZE = 1024 * 1024 * 1024 * 10;
 
@@ -26,7 +27,7 @@ async function main() {
   });
   const safeDB = new Lmdb({
     path: "./databases/unsafe",
-    asyncWrites: false,
+    asyncWrites: ASYNC_WRITES,
     mapSize: MAP_SIZE,
   });
 
@@ -41,7 +42,7 @@ async function main() {
   }
   await safeDB.commitWriteTransaction();
 
-  console.log("Reading all entries out");
+  console.log("(transaction) Reading all entries out");
   safeDB.startReadTransaction();
   {
     const start = Date.now();
@@ -53,9 +54,31 @@ async function main() {
     }
     const duration = Date.now() - start;
     const throughput = readEntries.length / duration;
-    console.log("Safe Throughput:", throughput, "entries / second");
+    console.log(
+      "(transaction) Safe Throughput:",
+      throughput,
+      "entries / second",
+    );
   }
   safeDB.commitReadTransaction();
+
+  console.log("(no-transaction) Reading all entries out");
+  {
+    const start = Date.now();
+    const readEntries = [];
+    let i = 0;
+    while (Date.now() - start < MAX_TIME && i < entries.length) {
+      readEntries.push(safeDB.getSync(entries[i].key));
+      i += 1;
+    }
+    const duration = Date.now() - start;
+    const throughput = readEntries.length / duration;
+    console.log(
+      "(no-transaction) Safe Throughput:",
+      throughput,
+      "entries / second",
+    );
+  }
 }
 
 main().catch((err) => {

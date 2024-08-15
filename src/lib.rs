@@ -138,7 +138,8 @@ impl LMDB {
     let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
       return Ok(env.get_null()?.into_unknown());
     };
-    let result = env.create_buffer_with_data(buffer)?;
+    let mut result = env.create_buffer(buffer.len())?;
+    result.copy_from_slice(&buffer);
     Ok(result.into_unknown())
   }
 

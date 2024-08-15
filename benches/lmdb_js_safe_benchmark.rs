@@ -8,14 +8,14 @@ fn criterion_benchmark(c: &mut Criterion) {
   let input = {
     std::fs::remove_dir_all("benchmark-databases").unwrap();
     std::fs::create_dir_all("benchmark-databases").unwrap();
-    DatabaseWriter::new(LMDBOptions {
+    DatabaseWriter::new(&LMDBOptions {
       path: "benchmark-databases/test.db".to_string(),
       async_writes: false,
       map_size: Some(1024 * 1024 * 1024),
     })
     .unwrap()
   };
-  let mut txn = input.environment.write_txn().unwrap();
+  let mut txn = input.environment().write_txn().unwrap();
   c.bench_function("inserting entries", |b| {
     b.iter(|| {
       input

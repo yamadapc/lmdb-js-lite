@@ -1,4 +1,3 @@
-use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -20,6 +19,10 @@ pub enum DatabaseWriterError {
   HeedError(#[from] heed::Error),
   #[error("IO error: {0}")]
   IOError(#[from] std::io::Error),
+  #[error("Failed to decompress entry {0}")]
+  DecompressError(#[from] lz4_flex::block::DecompressError),
+  #[error("Failed to compress entry {0}")]
+  CompressError(#[from] lz4_flex::block::CompressError),
 }
 
 #[derive(Hash, Clone, Eq, PartialOrd, PartialEq)]
@@ -181,6 +184,12 @@ pub struct DatabaseWriter {
 }
 
 impl DatabaseWriter {
+  pub fn environment(&self) -> &Env {
+    &self.environment
+  }
+}
+
+impl DatabaseWriter {
   pub fn new(options: &LMDBOptions) -> Result<Self> {
     let path = Path::new(&options.path);
     std::fs::create_dir_all(path)?;
@@ -212,11 +221,7 @@ impl DatabaseWriter {
 
   pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
     if let Some(result) = self.database.get(txn, key)? {
-      let mut decompressor = lz4::Decoder::new(result)?;
-      let mut output_buffer = vec![];
-      decompressor.read_to_end(&mut output_buffer)?;
-      let (_, result) = decompressor.finish();
-      result?;
+      let output_buffer = lz4_flex::block::decompress(result, result.len())?;
       Ok(Some(output_buffer))
     } else {
       Ok(None)
@@ -224,12 +229,7 @@ impl DatabaseWriter {
   }
 
   pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
-    let buffer = vec![];
-    let mut compressor = lz4::EncoderBuilder::new().build(buffer)?;
-    compressor.write_all(data)?;
-    let (compressed_data, result) = compressor.finish();
-    result?;
-
+    let compressed_data = lz4_flex::block::compress(data);
     self.database.put(txn, key, &compressed_data)?;
     Ok(())
   }
