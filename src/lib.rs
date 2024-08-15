@@ -77,6 +77,12 @@ pub struct Entry {
   pub value: Buffer,
 }
 
+pub struct NativeEntry {
+  pub key: String,
+  // We copy out of the buffer because it's undefined behaviour to send it across
+  pub value: Vec<u8>,
+}
+
 #[napi]
 pub struct LMDB {
   inner: Option<Arc<DatabaseHandle>>,
@@ -163,7 +169,13 @@ impl LMDB {
     let (deferred, promise) = env.create_deferred()?;
 
     let message = DatabaseWriterMessage::PutMany {
-      entries,
+      entries: entries
+        .into_iter()
+        .map(|entry| NativeEntry {
+          key: entry.key,
+          value: entry.value.into(),
+        })
+        .collect(),
       resolve: Box::new(|value| {
         deferred.resolve(|_| value.map_err(|err| napi_error(anyhow!("Failed to write {err}"))))
       }),
@@ -321,6 +333,7 @@ mod test {
       map_size: None,
     };
     let (write, read) = start_make_database_writer(&options).unwrap();
+    let read_txn = read.read_txn().unwrap();
 
     write
       .send(DatabaseWriterMessage::StartTransaction {
@@ -346,7 +359,6 @@ mod test {
       .unwrap();
     rx.recv().unwrap();
 
-    let read_txn = read.read_txn().unwrap();
     let value = read.get(&read_txn, "key").unwrap().unwrap();
     assert_eq!(value, [1, 2, 3, 4]);
   }

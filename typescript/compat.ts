@@ -37,7 +37,7 @@ export function open(
   return new LmdbWrapper(
     new Lmdb({
       path: directory,
-      asyncWrites: false,
+      asyncWrites: true,
       mapSize: 1024 * 1024 * 1024 * 50,
     }),
   );

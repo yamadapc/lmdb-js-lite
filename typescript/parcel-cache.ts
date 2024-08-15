@@ -58,11 +58,10 @@ export class LMDBCacheSafe implements Cache {
   }
 
   get<T>(key: string): Promise<T | null> {
-    let data = this.store.get(key);
+    const data = this.store.get(key);
     if (data == null) {
       return Promise.resolve(null);
     }
-
     return Promise.resolve(deserialize(data));
   }
 

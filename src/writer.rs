@@ -10,7 +10,7 @@ use heed::EnvOpenOptions;
 use heed::types::{Bytes, Str};
 use napi_derive::napi;
 
-use crate::Entry;
+use crate::NativeEntry;
 
 type Result<R> = std::result::Result<R, DatabaseWriterError>;
 
@@ -104,11 +104,15 @@ pub fn start_make_database_writer(
             break;
           }
           DatabaseWriterMessage::StartTransaction { resolve } => {
-            let mut run = || {
-              current_transaction = Some(writer.environment.write_txn()?);
-              Ok(())
-            };
-            resolve(run())
+            if current_transaction.is_none() {
+              let mut run = || {
+                current_transaction = Some(writer.environment.write_txn()?);
+                Ok(())
+              };
+              resolve(run())
+            } else {
+              resolve(Ok(()))
+            }
           }
           DatabaseWriterMessage::CommitTransaction { resolve } => {
             if let Some(txn) = current_transaction.take() {
@@ -118,13 +122,13 @@ pub fn start_make_database_writer(
           DatabaseWriterMessage::PutMany { entries, resolve } => {
             let run = || {
               if let Some(txn) = &mut current_transaction {
-                for Entry { key, value } in entries {
+                for NativeEntry { key, value } in entries {
                   writer.put(txn, &key, &value)?;
                 }
                 Ok(())
               } else {
                 let mut txn = writer.environment.write_txn()?;
-                for Entry { key, value } in entries {
+                for NativeEntry { key, value } in entries {
                   writer.put(&mut txn, &key, &value)?;
                 }
                 txn.commit()?;
@@ -135,6 +139,10 @@ pub fn start_make_database_writer(
             resolve(result);
           }
         }
+      }
+
+      if let Some(txn) = current_transaction {
+        let _ = txn.commit();
       }
     }
   });
@@ -155,7 +163,7 @@ pub enum DatabaseWriterMessage {
     resolve: ResolveCallback<()>,
   },
   PutMany {
-    entries: Vec<Entry>,
+    entries: Vec<NativeEntry>,
     resolve: ResolveCallback<()>,
   },
   StartTransaction {
