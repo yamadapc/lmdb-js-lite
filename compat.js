@@ -35,12 +35,13 @@ class LmdbWrapper {
   /**
    * @param {string} key
    * @param {Buffer} value
+   * @return {Promise<void>}
    */
-  put(key, value) {
+  async put(key, value) {
     if (typeof value === "string") {
       value = Buffer.from(v8.serialize(value));
     }
-    this.#lmdb.put(key, value);
+    await this.#lmdb.put(key, value);
   }
 
   resetReadTxn() {}

@@ -294,9 +294,6 @@ mod test {
       .unwrap();
 
     // If we don't commit the reader will not see the writes.
-    //
-    // However, the reader can see the writes from this transaction from the background regardless
-    // of when the read transaction started.
     let (tx, rx) = channel();
     write
       .send(DatabaseWriterMessage::CommitTransaction {
