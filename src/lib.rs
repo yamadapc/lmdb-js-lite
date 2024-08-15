@@ -139,6 +139,7 @@ impl LMDB {
       return Ok(env.get_null()?.into_unknown());
     };
     let mut result = env.create_buffer(buffer.len())?;
+    // This is faster than moving the vector in
     result.copy_from_slice(&buffer);
     Ok(result.into_unknown())
   }
