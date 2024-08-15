@@ -12,11 +12,11 @@ use napi::JsUnknown;
 use napi_derive::napi;
 use tracing::Level;
 
-use crate::writer::{
-  DatabaseWriter, DatabaseWriterError, DatabaseWriterHandle, DatabaseWriterMessage,
-  start_make_database_writer,
-};
 use crate::writer::LMDBOptions;
+use crate::writer::{
+  start_make_database_writer, DatabaseWriter, DatabaseWriterError, DatabaseWriterHandle,
+  DatabaseWriterMessage,
+};
 
 pub mod writer;
 
@@ -306,7 +306,7 @@ impl LMDB {
 
 enum Transaction<'a> {
   Owned(RoTxn<'a>),
-  Borrowed(&'a RoTxn<'a>)
+  Borrowed(&'a RoTxn<'a>),
 }
 
 impl<'a> Transaction<'a> {
@@ -327,12 +327,12 @@ mod test {
 
   #[test]
   fn create_database() {
+    let db_path = temp_dir()
+      .join("create_database")
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
     let options = LMDBOptions {
-      path: temp_dir()
-        .join("lmdb-cache-tests.db")
-        .to_str()
-        .unwrap()
-        .to_string(),
+      path: db_path.to_str().unwrap().to_string(),
       async_writes: false,
       map_size: None,
     };
@@ -342,18 +342,18 @@ mod test {
 
   #[test]
   fn consistency_test() {
+    let db_path = temp_dir()
+      .join("consistency_test")
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
     let options = LMDBOptions {
-      path: temp_dir()
-        .join("lmdb-cache-tests.db")
-        .to_str()
-        .unwrap()
-        .to_string(),
+      path: db_path.to_str().unwrap().to_string(),
       async_writes: false,
       map_size: None,
     };
     let (write, read) = start_make_database_writer(&options).unwrap();
-    let read_txn = read.read_txn().unwrap();
 
+    let (tx, rx) = channel();
     write
       .send(DatabaseWriterMessage::StartTransaction {
         resolve: Box::new(|_| {}),
@@ -366,9 +366,7 @@ mod test {
         resolve: Box::new(|_| {}),
       })
       .unwrap();
-
     // If we don't commit the reader will not see the writes.
-    let (tx, rx) = channel();
     write
       .send(DatabaseWriterMessage::CommitTransaction {
         resolve: Box::new(move |_| {
@@ -378,6 +376,7 @@ mod test {
       .unwrap();
     rx.recv().unwrap();
 
+    let read_txn = read.read_txn().unwrap();
     let value = read.get(&read_txn, "key").unwrap().unwrap();
     assert_eq!(value, [1, 2, 3, 4]);
   }
