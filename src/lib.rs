@@ -1,18 +1,19 @@
 #![deny(clippy::all)]
 
+use std::collections::HashMap;
 use std::fmt::Debug;
-use std::ops::DerefMut;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
 
 use anyhow::anyhow;
+use lazy_static::lazy_static;
 use napi::bindgen_prelude::Env;
 use napi::JsUnknown;
 use napi_derive::napi;
 use tracing::Level;
 
 use crate::writer::{
-  DatabaseWriter, DatabaseWriterHandle, DatabaseWriterMessage, start_make_database_writer,
+  DatabaseWriter, DatabaseWriterError, DatabaseWriterHandle, DatabaseWriterMessage,
+  start_make_database_writer,
 };
 use crate::writer::LMDBOptions;
 
@@ -25,6 +26,42 @@ type Buffer = Vec<u8>;
 
 fn napi_error(err: impl Debug) -> napi::Error {
   napi::Error::from_reason(format!("[napi] {err:?}"))
+}
+
+struct DatabaseHandle {
+  writer: Arc<DatabaseWriterHandle>,
+  database: Arc<DatabaseWriter>,
+}
+
+struct LMDBGlobalState {
+  /// Grows unbounded. It will not be cleaned-up as that complicates things. Opening and closing
+  /// many databases on the same process will cause this to grow.
+  databases: HashMap<LMDBOptions, Weak<DatabaseHandle>>,
+}
+
+impl LMDBGlobalState {
+  fn new() -> Self {
+    Self {
+      databases: HashMap::new(),
+    }
+  }
+
+  fn get_database(
+    &mut self,
+    options: LMDBOptions,
+  ) -> Result<Arc<DatabaseHandle>, DatabaseWriterError> {
+    let (writer, database) = start_make_database_writer(&options)?;
+    let handle = Arc::new(DatabaseHandle {
+      writer: Arc::new(writer),
+      database,
+    });
+    self.databases.insert(options, Arc::downgrade(&handle));
+    Ok(handle)
+  }
+}
+
+lazy_static! {
+  static ref STATE: Mutex<LMDBGlobalState> = Mutex::new(LMDBGlobalState::new());
 }
 
 #[napi]
@@ -42,7 +79,7 @@ pub struct Entry {
 
 #[napi]
 pub struct LMDB {
-  inner: Option<(Rc<DatabaseWriterHandle>, Arc<DatabaseWriter>)>,
+  inner: Option<Arc<DatabaseHandle>>,
   read_transaction: Option<heed::RoTxn<'static>>,
 }
 
@@ -50,19 +87,23 @@ pub struct LMDB {
 impl LMDB {
   #[napi(constructor)]
   pub fn new(options: LMDBOptions) -> napi::Result<Self> {
-    let (database_wrapper, writer) = start_make_database_writer(options).map_err(napi_error)?;
+    let mut state = STATE
+      .lock()
+      .map_err(|_| napi::Error::from_reason("LMDB State mutex is poisoned"))?;
+    let database = state.get_database(options).map_err(napi_error)?;
     Ok(Self {
-      inner: Some((Rc::new(database_wrapper), writer)),
+      inner: Some(database),
       read_transaction: None,
     })
   }
 
   #[napi(ts_return_type = "Promise<Buffer | null | undefined>")]
   pub fn get(&self, env: Env, key: String) -> napi::Result<napi::JsObject> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
-    inner
+    database_handle
+      .writer
       .send(DatabaseWriterMessage::Get {
         key,
         resolve: Box::new(|value| match value {
@@ -77,31 +118,28 @@ impl LMDB {
 
   #[napi(ts_return_type = "Buffer | null")]
   pub fn get_sync(&self, env: Env, key: String) -> napi::Result<JsUnknown> {
-    let (_, database) = self.get_database()?;
+    let database_handle = self.get_database()?;
+    let database = &database_handle.database;
 
-    if let Some(txn) = &self.read_transaction {
-      let buffer = database.get(txn, &key);
-      let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
-        return Ok(env.get_null()?.into_unknown());
-      };
-      let mut result = env.create_buffer_with_data(buffer)?;
-      Ok(result.into_unknown())
+    let txn = if let Some(txn) = &self.read_transaction {
+      txn
     } else {
-      let txn = database
+      &database
         .read_txn()
-        .map_err(|err| napi_error(anyhow!(err)))?;
-      let buffer = database.get(&txn, &key);
-      let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
-        return Ok(env.get_null()?.into_unknown());
-      };
-      let mut result = env.create_buffer_with_data(buffer)?;
-      Ok(result.into_unknown())
-    }
+        .map_err(|err| napi_error(anyhow!(err)))?
+    };
+    let buffer = database.get(txn, &key);
+    let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
+      return Ok(env.get_null()?.into_unknown());
+    };
+    let result = env.create_buffer_with_data(buffer)?;
+    Ok(result.into_unknown())
   }
 
   #[napi]
   pub fn get_many_sync(&self, keys: Vec<String>) -> napi::Result<Vec<Option<Buffer>>> {
-    let (_, database) = self.get_database()?;
+    let database_handle = self.get_database()?;
+    let database = &database_handle.database;
 
     let mut results = vec![];
     let txn = database
@@ -121,7 +159,7 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn put_many(&self, env: Env, entries: Vec<Entry>) -> napi::Result<napi::JsObject> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     let message = DatabaseWriterMessage::PutMany {
@@ -130,7 +168,8 @@ impl LMDB {
         deferred.resolve(|_| value.map_err(|err| napi_error(anyhow!("Failed to write {err}"))))
       }),
     };
-    inner
+    database_handle
+      .writer
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -139,7 +178,7 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn put(&self, env: Env, key: String, data: Buffer) -> napi::Result<napi::JsObject> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
     // This costs us 70% over the round-trip time after arg. conversion
     let (deferred, promise) = env.create_deferred()?;
 
@@ -151,7 +190,8 @@ impl LMDB {
         Err(err) => deferred.reject(napi_error(anyhow!("Failed to write {err}"))),
       }),
     };
-    inner
+    database_handle
+      .writer
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -160,14 +200,15 @@ impl LMDB {
 
   #[napi]
   pub fn put_no_confirm(&self, key: String, data: Buffer) -> napi::Result<()> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
 
     let message = DatabaseWriterMessage::Put {
       key,
       value: data.to_vec(),
       resolve: Box::new(|_| {}),
     };
-    inner
+    database_handle
+      .writer
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -179,8 +220,9 @@ impl LMDB {
     if self.read_transaction.is_some() {
       return Ok(());
     }
-    let (_, database) = self.get_database()?;
-    let txn = database
+    let database_handle = self.get_database()?;
+    let txn = database_handle
+      .database
       .static_read_txn()
       .map_err(|err| napi_error(anyhow!(err)))?;
     self.read_transaction = Some(txn);
@@ -199,13 +241,14 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn start_write_transaction(&self, env: Env) -> napi::Result<napi::JsObject> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     let message = DatabaseWriterMessage::StartTransaction {
       resolve: Box::new(|_| deferred.resolve(|_| Ok(()))),
     };
-    inner
+    database_handle
+      .writer
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -214,13 +257,14 @@ impl LMDB {
 
   #[napi(ts_return_type = "Promise<void>")]
   pub fn commit_write_transaction(&self, env: Env) -> napi::Result<napi::JsObject> {
-    let (inner, _) = self.get_database()?;
+    let database_handle = self.get_database()?;
     let (deferred, promise) = env.create_deferred()?;
 
     let message = DatabaseWriterMessage::CommitTransaction {
       resolve: Box::new(|_| deferred.resolve(|_| Ok(()))),
     };
-    inner
+    database_handle
+      .writer
       .send(message)
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
 
@@ -234,7 +278,7 @@ impl LMDB {
 }
 
 impl LMDB {
-  fn get_database(&self) -> napi::Result<&(Rc<DatabaseWriterHandle>, Arc<DatabaseWriter>)> {
+  fn get_database(&self) -> napi::Result<&Arc<DatabaseHandle>> {
     let inner = self
       .inner
       .as_ref()
@@ -276,7 +320,7 @@ mod test {
       async_writes: false,
       map_size: None,
     };
-    let (write, read) = start_make_database_writer(options).unwrap();
+    let (write, read) = start_make_database_writer(&options).unwrap();
 
     write
       .send(DatabaseWriterMessage::StartTransaction {

@@ -22,6 +22,7 @@ pub enum DatabaseWriterError {
   IOError(#[from] std::io::Error),
 }
 
+#[derive(Hash, Clone, Eq, PartialOrd, PartialEq)]
 #[napi(object)]
 pub struct LMDBOptions {
   pub path: String,
@@ -51,7 +52,7 @@ impl Drop for DatabaseWriterHandle {
 }
 
 pub fn start_make_database_writer(
-  options: LMDBOptions,
+  options: &LMDBOptions,
 ) -> Result<(DatabaseWriterHandle, Arc<DatabaseWriter>)> {
   let (tx, rx) = crossbeam::channel::unbounded();
   let writer = Arc::new(DatabaseWriter::new(options)?);
@@ -172,7 +173,7 @@ pub struct DatabaseWriter {
 }
 
 impl DatabaseWriter {
-  pub fn new(options: LMDBOptions) -> Result<Self> {
+  pub fn new(options: &LMDBOptions) -> Result<Self> {
     let path = Path::new(&options.path);
     std::fs::create_dir_all(path)?;
     let environment = unsafe {
@@ -201,7 +202,7 @@ impl DatabaseWriter {
     })
   }
 
-  pub fn get<'a>(&self, txn: &'a RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
+  pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
     if let Some(result) = self.database.get(txn, key)? {
       let mut decompressor = lz4::Decoder::new(result)?;
       let mut output_buffer = vec![];

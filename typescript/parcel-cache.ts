@@ -15,7 +15,7 @@ import { type Cache, FSCache } from "@parcel/cache";
 import { open } from "./compat";
 import { Readable } from "node:stream";
 
-const packageJson = require("./package.json");
+const packageJson = require("../package.json");
 
 const pipeline = promisify(stream.pipeline);
 

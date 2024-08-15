@@ -1,5 +1,5 @@
 // @ts-check
-import { Lmdb } from "./index";
+import { Lmdb } from "../index";
 
 interface DBOpenOptions {
   name: string;

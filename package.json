@@ -1,7 +1,7 @@
 {
   "name": "lmdb-js-lite",
   "version": "0.0.1-9",
-  "main": "compat.ts",
+  "main": "typescript/compat.ts",
   "types": "compat.d.ts",
   "repository": "https://github.com/yamadapc/lmdb-js-lite",
   "os": [
@@ -42,9 +42,9 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "napi build --platform --release",
-    "build:debug": "napi build --platform",
-    "prepublishOnly": "napi prepublish -t npm",
+    "build": "napi build --platform --release && tsc",
+    "build:debug": "napi build --platform && tsc",
+    "prepublishOnly": "napi prepublish -t npm && tsc",
     "test": "jest",
     "universal": "napi universal",
     "version": "napi version"
