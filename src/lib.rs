@@ -65,11 +65,9 @@ impl LMDB {
     inner
       .send(DatabaseWriterMessage::Get {
         key,
-        resolve: Box::new(|value| {
-          deferred.resolve(|_| {
-            let value = value.map_err(napi_error)?;
-            Ok(value.map(Buffer::from))
-          })
+        resolve: Box::new(|value| match value {
+          Ok(value) => deferred.resolve(move |_| Ok(value.map(Buffer::from))),
+          Err(err) => deferred.reject(napi_error(err)),
         }),
       })
       .map_err(|err| napi_error(anyhow!("Failed to send {err}")))?;
@@ -150,8 +148,9 @@ impl LMDB {
     let message = DatabaseWriterMessage::Put {
       key,
       value: data.to_vec(),
-      resolve: Box::new(|value| {
-        deferred.resolve(|_| value.map_err(|err| napi_error(anyhow!("Failed to write {err}"))))
+      resolve: Box::new(|value| match value {
+        Ok(value) => deferred.resolve(move |_| Ok(value)),
+        Err(err) => deferred.reject(napi_error(anyhow!("Failed to write {err}"))),
       }),
     };
     inner
