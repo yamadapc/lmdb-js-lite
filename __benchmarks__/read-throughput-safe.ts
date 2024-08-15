@@ -3,7 +3,7 @@ import { Lmdb } from "../index";
 import { mkdirSync, rmSync } from "node:fs";
 
 const KEY_SIZE = 64;
-const ENTRY_SIZE = 1024 * 10; // 10KB
+const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
 const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
 const MAP_SIZE = 1024 * 1024 * 1024 * 10;

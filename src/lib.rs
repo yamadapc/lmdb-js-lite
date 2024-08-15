@@ -75,7 +75,7 @@ impl LMDB {
     Ok(promise)
   }
 
-  #[napi(ts_return_type = "ArrayBuffer | null")]
+  #[napi(ts_return_type = "Buffer | null")]
   pub fn get_sync(&self, env: Env, key: String) -> napi::Result<JsUnknown> {
     let (_, database) = self.get_database()?;
 
@@ -84,8 +84,7 @@ impl LMDB {
       let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
         return Ok(env.get_null()?.into_unknown());
       };
-      let mut result = env.create_arraybuffer(buffer.len())?;
-      result.deref_mut().copy_from_slice(&buffer);
+      let mut result = env.create_buffer_with_data(buffer)?;
       Ok(result.into_unknown())
     } else {
       let txn = database
@@ -95,8 +94,7 @@ impl LMDB {
       let Some(buffer) = buffer.map_err(|err| napi_error(anyhow!(err)))? else {
         return Ok(env.get_null()?.into_unknown());
       };
-      let mut result = env.create_arraybuffer(buffer.len())?;
-      result.deref_mut().copy_from_slice(&buffer);
+      let mut result = env.create_buffer_with_data(buffer)?;
       Ok(result.into_unknown())
     }
   }

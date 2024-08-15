@@ -3,9 +3,10 @@ import { open as openLMDBUnsafe } from "lmdb";
 import { mkdirSync, rmSync } from "node:fs";
 
 const KEY_SIZE = 64;
-const ENTRY_SIZE = 64; // 64 bytes
+const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
-const ENABLE_COMPRESSION = false;
+const ENABLE_COMPRESSION = true;
+const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
 
 function generateEntry() {
   return {
@@ -30,7 +31,7 @@ async function main() {
   });
 
   console.log("Generating 1 million entries for testing");
-  const entries = [...Array(1e6)].map(() => {
+  const entries = [...Array(NUM_ENTRIES)].map(() => {
     return generateEntry();
   });
 

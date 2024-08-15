@@ -3,9 +3,10 @@ import { mkdirSync, rmSync } from "node:fs";
 import { open as openLMDBUnsafe } from "lmdb";
 
 const KEY_SIZE = 64;
-const ENTRY_SIZE = 1024 * 10; // 10KB
+const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
 const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
+const ENABLE_COMPRESSION = true;
 
 let key = 0;
 function generateEntry() {
@@ -25,7 +26,7 @@ async function main() {
   });
   const unsafeDB = openLMDBUnsafe({
     path: "./databases/unsafe",
-    compression: false,
+    compression: ENABLE_COMPRESSION,
     encoding: "binary",
     eventTurnBatching: true,
   });

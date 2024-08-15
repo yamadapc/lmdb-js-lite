@@ -3,9 +3,10 @@ import { Lmdb } from "../index";
 import { mkdirSync, rmSync } from "node:fs";
 
 const KEY_SIZE = 64;
-const ENTRY_SIZE = 64; // 64 bytes
+const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
 const MAP_SIZE = 1024 * 1024 * 1024 * 10;
+const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
 
 function generateEntry() {
   return {
@@ -29,8 +30,8 @@ async function main() {
   });
 
   {
-    console.log("Generating 1 million entries for testing");
-    const entries = [...Array(1e6)].map(() => {
+    console.log("Generating entries for testing");
+    const entries = [...Array(NUM_ENTRIES)].map(() => {
       return generateEntry();
     });
     console.log("(no-batching) Writing entries for", MAX_TIME, "ms");
@@ -50,8 +51,8 @@ async function main() {
   }
 
   {
-    console.log("Generating 1 million entries for testing");
-    const entries = [...Array(1e6)].map(() => {
+    console.log("Generating entries for testing");
+    const entries = [...Array(NUM_ENTRIES)].map(() => {
       return generateEntry();
     });
     console.log("(manual batching) Writing entries for", MAX_TIME, "ms");

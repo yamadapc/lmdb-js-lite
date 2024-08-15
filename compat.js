@@ -24,12 +24,10 @@ class LmdbWrapper {
 
   /**
    * @param {string} key
-   * @returns {Uint8Array}
+   * @returns {Buffer | null}
    */
   get(key) {
-    const value = this.#lmdb.getSync(key);
-    if (value == null) return value;
-    return Buffer.from(value);
+    return this.#lmdb.getSync(key);
   }
 
   /**
@@ -39,7 +37,7 @@ class LmdbWrapper {
    */
   async put(key, value) {
     if (typeof value === "string") {
-      value = Buffer.from(v8.serialize(value));
+      value = Buffer.from(value);
     }
     await this.#lmdb.put(key, value);
   }
