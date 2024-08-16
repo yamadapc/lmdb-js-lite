@@ -1,6 +1,6 @@
 {
   "name": "lmdb-js-lite",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "main": "typescript/compat.ts",
   "types": "compat.d.ts",
   "repository": "https://github.com/yamadapc/lmdb-js-lite",
