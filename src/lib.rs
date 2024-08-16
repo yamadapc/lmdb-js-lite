@@ -328,6 +328,7 @@ mod test {
   #[test]
   fn create_database() {
     let db_path = temp_dir()
+      .join("lmdb-js-lite")
       .join("create_database")
       .join("lmdb-cache-tests.db");
     let _ = std::fs::remove_dir_all(&db_path);
@@ -343,6 +344,7 @@ mod test {
   #[test]
   fn consistency_test() {
     let db_path = temp_dir()
+      .join("lmdb-js-lite")
       .join("consistency_test")
       .join("lmdb-cache-tests.db");
     let _ = std::fs::remove_dir_all(&db_path);
@@ -378,6 +380,7 @@ mod test {
 
     let read_txn = read.read_txn().unwrap();
     let value = read.get(&read_txn, "key").unwrap().unwrap();
+    read_txn.commit().unwrap();
     assert_eq!(value, [1, 2, 3, 4]);
   }
 }

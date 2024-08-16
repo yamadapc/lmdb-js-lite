@@ -257,3 +257,203 @@ impl DatabaseWriter {
     self.environment.clone().static_read_txn()
   }
 }
+
+#[cfg(test)]
+mod test {
+  use std::env::temp_dir;
+  use std::sync::mpsc::channel;
+
+  use super::*;
+
+  fn random() -> String {
+    let value = rand::random::<i32>();
+    format!("{value}")
+  }
+
+  #[test]
+  fn database_writer_can_read_and_write() {
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join(random())
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
+
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+
+    let writer = DatabaseWriter::new(&options).unwrap();
+    let mut write_txn = writer.environment().write_txn().unwrap();
+    writer
+      .put(&mut write_txn, "key", &vec![1, 2, 3, 3, 3, 3, 3, 3, 4])
+      .unwrap();
+    write_txn.commit().unwrap();
+
+    let read_txn = writer.environment().read_txn().unwrap();
+    let value = writer.get(&read_txn, "key").unwrap().unwrap();
+    assert_eq!(&value, &vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    drop(read_txn);
+    let read_txn = writer.environment().read_txn().unwrap();
+    let value = writer.get(&read_txn, "other-key").unwrap();
+    assert_eq!(&value, &None);
+  }
+
+  #[test]
+  fn database_writer_thread_write() {
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join(random())
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
+
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+
+    let (writer, _) = start_make_database_writer(&options).unwrap();
+    put_sync(&writer, "key1", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    put_sync(&writer, "key2", vec![1, 2, 3]);
+  }
+
+  #[test]
+  fn database_writer_thread_read_after_write() {
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join(random())
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
+
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+
+    let (writer, _) = start_make_database_writer(&options).unwrap();
+    put_sync(&writer, "key1", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    let result = get_sync(&writer, "key1");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+    put_sync(&writer, "key2", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    let result = get_sync(&writer, "key2");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+  }
+
+  #[test]
+  fn database_writer_thread_read_after_bulk_write() {
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join(random())
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
+
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+
+    let (writer, _) = start_make_database_writer(&options).unwrap();
+    let (tx, rx) = channel();
+    writer
+      .send(DatabaseWriterMessage::PutMany {
+        entries: vec![
+          NativeEntry {
+            key: "key1".into(),
+            value: vec![1, 2, 3, 3, 3, 3, 3, 3, 4],
+          },
+          NativeEntry {
+            key: "key2".into(),
+            value: vec![1, 2, 3, 3, 3, 3, 3, 3, 4],
+          },
+        ],
+        resolve: Box::new(move |result| {
+          tx.send(result).unwrap();
+        }),
+      })
+      .unwrap();
+    rx.recv().unwrap().unwrap();
+
+    let result = get_sync(&writer, "key1");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+    put_sync(&writer, "key2", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    let result = get_sync(&writer, "key2");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+  }
+
+  #[test]
+  fn database_writer_thread_read_within_transaction() {
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join(random())
+      .join("lmdb-cache-tests.db");
+    let _ = std::fs::remove_dir_all(&db_path);
+
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+
+    let (writer, reader) = start_make_database_writer(&options).unwrap();
+    writer
+      .send(DatabaseWriterMessage::StartTransaction {
+        resolve: Box::new(|_| {}),
+      })
+      .unwrap();
+    put_sync(&writer, "key1", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    let result = get_sync(&writer, "key1");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+    put_sync(&writer, "key2", vec![1, 2, 3, 3, 3, 3, 3, 3, 4]);
+    let result = get_sync(&writer, "key2");
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+
+    let main_txn = reader.read_txn().unwrap();
+    let result = reader.get(&main_txn, "key1").unwrap();
+    assert_eq!(result, None);
+    drop(main_txn);
+
+    // After commit
+    let (tx, rx) = channel();
+    writer
+      .send(DatabaseWriterMessage::CommitTransaction {
+        resolve: Box::new(move |result| tx.send(result).unwrap()),
+      })
+      .unwrap();
+    rx.recv().unwrap().unwrap();
+
+    let main_txn = reader.read_txn().unwrap();
+    let result = reader.get(&main_txn, "key1").unwrap();
+    assert_eq!(result, Some(vec![1, 2, 3, 3, 3, 3, 3, 3, 4]));
+  }
+
+  fn put_sync(writer: &DatabaseWriterHandle, key: impl Into<String>, value: Vec<u8>) {
+    let (tx, rx) = channel();
+    writer
+      .send(DatabaseWriterMessage::Put {
+        key: key.into(),
+        value,
+        resolve: Box::new(move |result| {
+          tx.send(result).unwrap();
+        }),
+      })
+      .unwrap();
+    let _result = rx.recv().unwrap().unwrap();
+  }
+
+  fn get_sync(writer: &DatabaseWriterHandle, key: impl Into<String>) -> Option<Vec<u8>> {
+    let (tx, rx) = channel();
+    writer
+      .send(DatabaseWriterMessage::Get {
+        key: key.into(),
+        resolve: Box::new(move |result| {
+          tx.send(result).unwrap();
+        }),
+      })
+      .unwrap();
+    rx.recv().unwrap().unwrap()
+  }
+}
