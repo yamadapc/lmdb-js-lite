@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use crossbeam::channel::Sender;
+use crossbeam::channel::{Receiver, Sender};
 use heed::{Env, RoTxn, RwTxn};
 use heed::EnvFlags;
 use heed::EnvOpenOptions;
@@ -63,94 +63,109 @@ pub fn start_make_database_writer(
   let thread_handle = std::thread::spawn({
     let writer = writer.clone();
     move || {
-      tracing::debug!("Starting database writer thread");
-      let mut current_transaction: Option<RwTxn> = None;
-
-      while let Ok(msg) = rx.recv() {
-        match msg {
-          DatabaseWriterMessage::Get { key, resolve } => {
-            let run = || {
-              if let Some(txn) = &current_transaction {
-                let result = writer.get(txn, &key)?.map(|d| d.to_owned());
-                Ok(result)
-              } else {
-                let txn = writer.environment.read_txn()?;
-                let result = writer.get(&txn, &key)?.map(|d| d.to_owned());
-                txn.commit()?;
-                Ok(result)
-              }
-            };
-            let result = run();
-            resolve(result.map(|o| o.map(|d| d.to_owned())));
-          }
-          DatabaseWriterMessage::Put {
-            value,
-            resolve,
-            key,
-          } => {
-            let mut run = || {
-              if let Some(txn) = &mut current_transaction {
-                writer.put(txn, &key, &value)?;
-                Ok(())
-              } else {
-                let mut txn = writer.environment.write_txn()?;
-                writer.put(&mut txn, &key, &value)?;
-                txn.commit()?;
-                Ok(())
-              }
-            };
-            let result = run();
-            resolve(result);
-          }
-          DatabaseWriterMessage::Stop => {
-            tracing::debug!("Stopping writer thread");
-            break;
-          }
-          DatabaseWriterMessage::StartTransaction { resolve } => {
-            if current_transaction.is_none() {
-              let mut run = || {
-                current_transaction = Some(writer.environment.write_txn()?);
-                Ok(())
-              };
-              resolve(run())
-            } else {
-              resolve(Ok(()))
-            }
-          }
-          DatabaseWriterMessage::CommitTransaction { resolve } => {
-            if let Some(txn) = current_transaction.take() {
-              resolve(txn.commit().map_err(DatabaseWriterError::from))
-            }
-          }
-          DatabaseWriterMessage::PutMany { entries, resolve } => {
-            let run = || {
-              if let Some(txn) = &mut current_transaction {
-                for NativeEntry { key, value } in entries {
-                  writer.put(txn, &key, &value)?;
-                }
-                Ok(())
-              } else {
-                let mut txn = writer.environment.write_txn()?;
-                for NativeEntry { key, value } in entries {
-                  writer.put(&mut txn, &key, &value)?;
-                }
-                txn.commit()?;
-                Ok(())
-              }
-            };
-            let result = run();
-            resolve(result);
-          }
-        }
-      }
-
-      if let Some(txn) = current_transaction {
-        let _ = txn.commit();
-      }
+      run_database_writer(rx, writer);
     }
   });
 
   Ok((DatabaseWriterHandle { tx, thread_handle }, writer))
+}
+
+fn run_database_writer(rx: Receiver<DatabaseWriterMessage>, writer: Arc<DatabaseWriter>) {
+  tracing::debug!("Starting database writer thread");
+  let mut current_transaction: Option<RwTxn> = None;
+
+  while let Ok(msg) = rx.recv() {
+    if handle_message(&writer, &mut current_transaction, msg) {
+      break;
+    }
+  }
+
+  if let Some(txn) = current_transaction {
+    let _ = txn.commit();
+  }
+}
+
+fn handle_message<'a, 'b>(
+  writer: &'a DatabaseWriter,
+  current_transaction: &'b mut Option<RwTxn<'a>>,
+  msg: DatabaseWriterMessage,
+) -> bool {
+  match msg {
+    DatabaseWriterMessage::Get { key, resolve } => {
+      let run = || {
+        if let Some(txn) = &current_transaction {
+          let result = writer.get(txn, &key)?.map(|d| d.to_owned());
+          Ok(result)
+        } else {
+          let txn = writer.environment.read_txn()?;
+          let result = writer.get(&txn, &key)?.map(|d| d.to_owned());
+          txn.commit()?;
+          Ok(result)
+        }
+      };
+      let result = run();
+      resolve(result.map(|o| o.map(|d| d.to_owned())));
+    }
+    DatabaseWriterMessage::Put {
+      value,
+      resolve,
+      key,
+    } => {
+      let mut run = || {
+        if let Some(txn) = current_transaction {
+          writer.put(txn, &key, &value)?;
+          Ok(())
+        } else {
+          let mut txn = writer.environment.write_txn()?;
+          writer.put(&mut txn, &key, &value)?;
+          txn.commit()?;
+          Ok(())
+        }
+      };
+      let result = run();
+      resolve(result);
+    }
+    DatabaseWriterMessage::Stop => {
+      tracing::debug!("Stopping writer thread");
+      return true;
+    }
+    DatabaseWriterMessage::StartTransaction { resolve } => {
+      if current_transaction.is_none() {
+        let mut run = || {
+          *current_transaction = Some(writer.environment.write_txn()?);
+          Ok(())
+        };
+        resolve(run())
+      } else {
+        resolve(Ok(()))
+      }
+    }
+    DatabaseWriterMessage::CommitTransaction { resolve } => {
+      if let Some(txn) = current_transaction.take() {
+        resolve(txn.commit().map_err(DatabaseWriterError::from))
+      }
+    }
+    DatabaseWriterMessage::PutMany { entries, resolve } => {
+      let run = || {
+        if let Some(txn) = current_transaction {
+          for NativeEntry { key, value } in entries {
+            writer.put(txn, &key, &value)?;
+          }
+          Ok(())
+        } else {
+          let mut txn = writer.environment.write_txn()?;
+          for NativeEntry { key, value } in entries {
+            writer.put(&mut txn, &key, &value)?;
+          }
+          txn.commit()?;
+          Ok(())
+        }
+      };
+      let result = run();
+      resolve(result);
+    }
+  }
+  false
 }
 
 type ResolveCallback<T> = Box<dyn FnOnce(Result<T>) + Send>;

@@ -42,9 +42,9 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "napi build --platform --release && tsc",
-    "build:debug": "napi build --platform && tsc",
-    "prepublishOnly": "napi prepublish -t npm && tsc",
+    "build": "tsc && napi build --platform --release",
+    "build:debug": "tsc && napi build --platform",
+    "prepublishOnly": "tsc && napi prepublish -t npm",
     "test": "jest",
     "universal": "napi universal",
     "version": "napi version"
