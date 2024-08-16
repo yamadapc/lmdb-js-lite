@@ -18,16 +18,16 @@ function generateEntry() {
 }
 
 async function main() {
-  rmSync("./databases", {
+  rmSync("./databases/safe", {
     recursive: true,
     force: true,
   });
-  mkdirSync("./databases", {
+  mkdirSync("./databases/safe", {
     recursive: true,
   });
 
   const safeDB = new Lmdb({
-    path: "./databases/read",
+    path: "./databases/safe/read",
     asyncWrites: ASYNC_WRITES,
     mapSize: MAP_SIZE,
   });

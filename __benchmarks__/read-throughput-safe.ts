@@ -1,24 +1,13 @@
-import { randomBytes } from "node:crypto";
 import { Lmdb } from "../index";
-import { mkdirSync, rmSync } from "node:fs";
 import * as v8 from "node:v8";
 
-const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
 const ASYNC_WRITES = true;
 const MAP_SIZE = 1024 * 1024 * 1024 * 10;
 
-let key = 0;
-function generateEntry() {
-  return {
-    key: String(key++),
-    value: randomBytes(ENTRY_SIZE),
-  };
-}
-
 async function main() {
   const safeDB = new Lmdb({
-    path: "./databases/read",
+    path: "./databases/safe/read",
     asyncWrites: ASYNC_WRITES,
     mapSize: MAP_SIZE,
   });

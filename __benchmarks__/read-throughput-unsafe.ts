@@ -1,18 +1,12 @@
-import { randomBytes } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
 import { open as openLMDBUnsafe } from "lmdb";
 import v8 from "node:v8";
 
-const KEY_SIZE = 64;
-const ENTRY_SIZE = 64 * 1024; // 64KB
 const MAX_TIME = 10000;
-const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024) / ENTRY_SIZE); // Total memory used 1GB
-const ENABLE_COMPRESSION = true;
 
 async function main() {
   const unsafeDB = openLMDBUnsafe({
-    path: "./databases/read",
-    compression: ENABLE_COMPRESSION,
+    path: "./databases/unsafe/read",
+    compression: true,
     encoding: "binary",
     eventTurnBatching: true,
   });

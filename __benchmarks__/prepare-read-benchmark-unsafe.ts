@@ -1,13 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import * as v8 from "node:v8";
-import { Lmdb } from "../index";
 import { open as openLMDBUnsafe } from "lmdb";
 
 const ENTRY_SIZE = 64 * 1024; // 64KB
-const ASYNC_WRITES = true;
 const NUM_ENTRIES = Math.floor((1024 * 1024 * 1024 * 5) / ENTRY_SIZE); // Total memory used 1GB
-const MAP_SIZE = 1024 * 1024 * 1024 * 10;
 
 let key = 0;
 
@@ -19,16 +16,16 @@ function generateEntry() {
 }
 
 async function main() {
-  rmSync("./databases", {
+  rmSync("./databases/unsafe", {
     recursive: true,
     force: true,
   });
-  mkdirSync("./databases", {
+  mkdirSync("./databases/unsafe", {
     recursive: true,
   });
 
   const unsafeDB = openLMDBUnsafe({
-    path: "./databases/read",
+    path: "./databases/unsafe/read",
     encoding: "binary",
     compression: true,
     eventTurnBatching: true,
@@ -38,16 +35,18 @@ async function main() {
   const entries = [...Array(NUM_ENTRIES)].map(() => {
     return generateEntry();
   });
-  console.log("Writing entries");
-  for (let entry of entries) {
-    await unsafeDB.put(entry.key, entry.value);
-  }
-  await unsafeDB.put(
-    "benchmarkInfo",
-    v8.serialize({
-      NUM_ENTRIES,
-    }),
-  );
+  await unsafeDB.transaction(() => {
+    console.log("Writing entries");
+    for (let entry of entries) {
+      unsafeDB.put(entry.key, entry.value);
+    }
+    unsafeDB.put(
+      "benchmarkInfo",
+      v8.serialize({
+        NUM_ENTRIES,
+      }),
+    );
+  });
 }
 
 main().catch((err) => {
