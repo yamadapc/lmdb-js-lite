@@ -36,6 +36,5 @@ lto = true
 strip = "symbols"
 
 [profile.profiling]
-inherits = "release"
+inherits = "bench"
 debug = 1
-strip = false
