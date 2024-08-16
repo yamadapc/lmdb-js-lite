@@ -34,4 +34,4 @@ napi-build = "2.1.3"
 [profile.release]
 lto = true
 # debug = 1
-# strip = "symbols"
+strip = "symbols"

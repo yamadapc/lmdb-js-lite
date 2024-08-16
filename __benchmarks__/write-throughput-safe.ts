@@ -26,7 +26,7 @@ async function main() {
       recursive: true,
     });
     const safeDB = new Lmdb({
-      path: "./databases/unsafe",
+      path: "./databases/safe/no-batching",
       asyncWrites: ASYNC_WRITES,
       mapSize: MAP_SIZE,
     });
@@ -63,7 +63,7 @@ async function main() {
       recursive: true,
     });
     const safeDB = new Lmdb({
-      path: "./databases/unsafe",
+      path: "./databases/safe/manual",
       asyncWrites: ASYNC_WRITES,
       mapSize: MAP_SIZE,
     });
