@@ -8,6 +8,7 @@ use heed::EnvFlags;
 use heed::EnvOpenOptions;
 use heed::types::{Bytes, Str};
 use napi_derive::napi;
+use rayon::prelude::*;
 
 use crate::NativeEntry;
 
@@ -146,20 +147,30 @@ fn handle_message<'a, 'b>(
       }
     }
     DatabaseWriterMessage::PutMany { entries, resolve } => {
-      let run = || {
-        if let Some(txn) = current_transaction {
-          for NativeEntry { key, value } in entries {
-            writer.put(txn, &key, &value)?;
-          }
-          Ok(())
+      let mut run = || {
+        let compressed_entries: Vec<Vec<u8>> = entries
+          .par_iter()
+          .map(|entry| lz4_flex::block::compress_prepend_size(&entry.value))
+          .collect();
+
+        let mut txn = if let Some(txn) = current_transaction {
+          RwTransaction::Borrowed(txn)
         } else {
-          let mut txn = writer.environment.write_txn()?;
-          for NativeEntry { key, value } in entries {
-            writer.put(&mut txn, &key, &value)?;
-          }
-          txn.commit()?;
-          Ok(())
+          let txn = writer.environment.write_txn()?;
+          RwTransaction::Owned(txn)
+        };
+
+        for (NativeEntry { key, .. }, compressed_value) in entries.iter().zip(compressed_entries) {
+          writer
+            .database
+            .put(txn.deref_mut(), key, &compressed_value)?;
         }
+
+        if let RwTransaction::Owned(txn) = txn {
+          txn.commit()?;
+        }
+
+        Ok(())
       };
       let result = run();
       resolve(result);
@@ -191,6 +202,34 @@ pub enum DatabaseWriterMessage {
     resolve: ResolveCallback<()>,
   },
   Stop,
+}
+
+pub enum RwTransaction<'a, 'b> {
+  Owned(RwTxn<'b>),
+  Borrowed(&'a mut RwTxn<'b>),
+}
+
+impl<'a, 'b> RwTransaction<'a, 'b> {
+  pub fn deref_mut(&mut self) -> &mut RwTxn<'b> {
+    match self {
+      RwTransaction::Borrowed(txn) => txn,
+      RwTransaction::Owned(txn) => txn,
+    }
+  }
+}
+
+pub enum Transaction<'a, 'b> {
+  Owned(RoTxn<'b>),
+  Borrowed(&'a RoTxn<'b>),
+}
+
+impl<'a, 'b> Transaction<'a, 'b> {
+  pub fn deref(&self) -> &RoTxn<'b> {
+    match self {
+      Transaction::Borrowed(txn) => txn,
+      Transaction::Owned(txn) => &txn,
+    }
+  }
 }
 
 pub struct DatabaseWriter {
