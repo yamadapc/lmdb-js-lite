@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "lmdb-js-lite"
-version = "0.1.0"
+version = "0.1.1"
 repository = "https://github.com/yamadapc/lmdb-js-lite"
 
 [[bench]]
