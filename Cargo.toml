@@ -36,5 +36,5 @@ lto = true
 strip = "symbols"
 
 [profile.profiling]
+inherits = "release"
 debug = 1
-lto = true
