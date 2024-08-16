@@ -25,12 +25,12 @@ pub enum DatabaseWriterError {
   CompressError(#[from] lz4_flex::block::CompressError),
 }
 
-#[derive(Hash, Clone, Eq, PartialOrd, PartialEq)]
+#[derive(Clone, PartialOrd, PartialEq)]
 #[napi(object)]
 pub struct LMDBOptions {
   pub path: String,
   pub async_writes: bool,
-  pub map_size: Option<u32>,
+  pub map_size: Option<f64>,
 }
 
 pub struct DatabaseWriterHandle {

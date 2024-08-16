@@ -37,7 +37,7 @@ struct DatabaseHandle {
 struct LMDBGlobalState {
   /// Grows unbounded. It will not be cleaned-up as that complicates things. Opening and closing
   /// many databases on the same process will cause this to grow.
-  databases: HashMap<LMDBOptions, Weak<DatabaseHandle>>,
+  databases: HashMap<String, Weak<DatabaseHandle>>,
 }
 
 impl LMDBGlobalState {
@@ -51,12 +51,19 @@ impl LMDBGlobalState {
     &mut self,
     options: LMDBOptions,
   ) -> Result<Arc<DatabaseHandle>, DatabaseWriterError> {
+    if let Some(database) = self
+      .databases
+      .get(&options.path)
+      .and_then(|database| database.upgrade())
+    {
+      return Ok(database);
+    }
     let (writer, database) = start_make_database_writer(&options)?;
     let handle = Arc::new(DatabaseHandle {
       writer: Arc::new(writer),
       database,
     });
-    self.databases.insert(options, Arc::downgrade(&handle));
+    self.databases.insert(options.path, Arc::downgrade(&handle));
     Ok(handle)
   }
 }
