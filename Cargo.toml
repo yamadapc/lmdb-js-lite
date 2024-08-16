@@ -34,7 +34,3 @@ napi-build = "2.1.3"
 [profile.release]
 lto = true
 strip = "symbols"
-
-[profile.profiling]
-inherits = "bench"
-debug = 1
