@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex, Weak};
 
 use anyhow::anyhow;
-use heed::RoTxn;
 use lazy_static::lazy_static;
 use napi::bindgen_prelude::Env;
 use napi::JsUnknown;
@@ -136,9 +135,9 @@ impl LMDB {
     let database = &database_handle.database;
 
     let txn = if let Some(txn) = &self.read_transaction {
-      Transaction::Borrowed(txn)
+      writer::Transaction::Borrowed(txn)
     } else {
-      Transaction::Owned(
+      writer::Transaction::Owned(
         database
           .read_txn()
           .map_err(|err| napi_error(anyhow!(err)))?,
@@ -308,20 +307,6 @@ impl LMDB {
       .as_ref()
       .ok_or_else(|| napi::Error::from_reason("Trying to use closed DB"))?;
     Ok(inner)
-  }
-}
-
-enum Transaction<'a> {
-  Owned(RoTxn<'a>),
-  Borrowed(&'a RoTxn<'a>),
-}
-
-impl<'a> Transaction<'a> {
-  fn deref(&self) -> &RoTxn<'a> {
-    match self {
-      Transaction::Borrowed(txn) => txn,
-      Transaction::Owned(txn) => &txn,
-    }
   }
 }
 
