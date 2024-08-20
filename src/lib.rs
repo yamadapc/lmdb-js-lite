@@ -1,3 +1,39 @@
+//! This crate implements a LMDB wrapper for Node.js using N-API.
+//! 
+//! The wrapper is designed to be used from multi-threaded Node.js applications
+//! that use transactions sparingly or not at all.
+//! 
+//! A global mutex holds a map of reference counted open database handles.
+//!
+//! This is because, by contract, we can’t open the same database multiple times
+//! on a single process, even though we can access it from multiple
+//! threads/processes.
+//!
+//! When JavaScript opens a database, the handle is created and added to the
+//! map.
+//!
+//! Each database handle consists of 2 parts, the native LMDB handle and a
+//! message channel into a writer thread. These are the respectively:
+//!
+//! - [`DatabaseWriter`] - The native LMDB handle
+//! - [`DatabaseWriterHandle`] - The message channel onto a writer thread
+//! 
+//! Because we want to avoid blocking JavaScript threads waiting on write
+//! compression and acquiring the write lock, all writes are sent to a single
+//! writer thread
+//!
+//! This means currently compression runs single-threaded, which is not ideal.
+//! 
+//! Reads will never lock, and it’s faster to de-compress on the main-thread
+//! than the writer thread, since we avoid both message passing overhead,
+//! waiting on other threads and creating JavaScript promises for the reads.
+//!
+//! We use a rust implementation of lz4, which is many times faster than the
+//! native version - [`lz4_flex`].
+//!
+//! If `async_writes` is turned on, we turn off fsync / msync after commits ;
+//! this means that the database will have lower durability guarantees, but
+//! it should still be consistent in memory and within transactions.
 #![deny(clippy::all)]
 
 use std::collections::HashMap;

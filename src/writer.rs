@@ -29,11 +29,24 @@ pub enum DatabaseWriterError {
 #[derive(Clone, PartialOrd, PartialEq)]
 #[napi(object)]
 pub struct LMDBOptions {
+  /// The database directory path
   pub path: String,
+  /// If enabled, the database writer will set the following flags:
+  ///
+  /// * MAP_ASYNC - "use asynchronous msync when MDB_WRITEMAP is used"
+  /// * NO_SYNC - "don't fsync after commit"
+  /// * NO_META_SYNC - "don't fsync metapage after commit"
+  /// 
+  /// `MDB_WRITEMAP` is on by default.
   pub async_writes: bool,
+  /// The mmap size, this corresponds to [`mdb_env_set_mapsize`](http://www.lmdb.tech/doc/group__mdb.html#gaa2506ec8dab3d969b0e609cd82e619e5)
+  /// if this isn't set it'll default to around 10MB.
   pub map_size: Option<f64>,
 }
 
+/// This is a message passing handle into the writer thread.
+///
+/// There is always a single writer thread per database.
 pub struct DatabaseWriterHandle {
   tx: Sender<DatabaseWriterMessage>,
   #[allow(unused)]
@@ -41,6 +54,7 @@ pub struct DatabaseWriterHandle {
 }
 
 impl DatabaseWriterHandle {
+  /// Send a message into the writer thread.
   pub fn send(
     &self,
     message: DatabaseWriterMessage,
@@ -55,6 +69,13 @@ impl Drop for DatabaseWriterHandle {
   }
 }
 
+/// Open the database and start the writer thread. Two handles are returned:
+///
+/// * A raw DB handle that can be used for synchronous reads
+/// * A writer handle that can be used to send messages to the writer thread
+/// 
+/// The writer handle should be used to create write transactions shared across
+/// Node.js threads.
 pub fn start_make_database_writer(
   options: &LMDBOptions,
 ) -> Result<(DatabaseWriterHandle, Arc<DatabaseWriter>)> {
@@ -71,6 +92,7 @@ pub fn start_make_database_writer(
   Ok((DatabaseWriterHandle { tx, thread_handle }, writer))
 }
 
+/// Main-loop for the database writer thread
 fn run_database_writer(rx: Receiver<DatabaseWriterMessage>, writer: Arc<DatabaseWriter>) {
   tracing::debug!("Starting database writer thread");
   let mut current_transaction: Option<RwTxn> = None;
@@ -244,6 +266,8 @@ impl DatabaseWriter {
 }
 
 impl DatabaseWriter {
+  /// Create a new [`DatabaseWriter`] handle see [`LMDBOptions`] for
+  /// documentation on the settings.
   pub fn new(options: &LMDBOptions) -> Result<Self> {
     let path = Path::new(&options.path);
     std::fs::create_dir_all(path)?;
@@ -273,6 +297,7 @@ impl DatabaseWriter {
     })
   }
 
+  /// Compress an entry and store it
   pub fn get(&self, txn: &RoTxn, key: &str) -> Result<Option<Vec<u8>>> {
     if let Some(result) = self.database.get(txn, key)? {
       let output_buffer = lz4_flex::block::decompress_size_prepended(result)?;
@@ -282,16 +307,20 @@ impl DatabaseWriter {
     }
   }
 
+  /// Read an entry and decompress it
   pub fn put(&self, txn: &mut RwTxn, key: &str, data: &[u8]) -> Result<()> {
     let compressed_data = lz4_flex::block::compress_prepend_size(data);
     self.database.put(txn, key, &compressed_data)?;
     Ok(())
   }
 
+  /// Create a read transaction
   pub fn read_txn(&self) -> heed::Result<RoTxn> {
     self.environment.read_txn()
   }
 
+  /// Create a static read transaction that owns a reference counted copy of
+  /// the database environment
   pub fn static_read_txn(&self) -> heed::Result<RoTxn<'static>> {
     self.environment.clone().static_read_txn()
   }
