@@ -1,8 +1,8 @@
 //! This crate implements a LMDB wrapper for Node.js using N-API.
-//! 
+//!
 //! The wrapper is designed to be used from multi-threaded Node.js applications
 //! that use transactions sparingly or not at all.
-//! 
+//!
 //! A global mutex holds a map of reference counted open database handles.
 //!
 //! This is because, by contract, we can’t open the same database multiple times
@@ -17,13 +17,13 @@
 //!
 //! - [`DatabaseWriter`] - The native LMDB handle
 //! - [`DatabaseWriterHandle`] - The message channel onto a writer thread
-//! 
+//!
 //! Because we want to avoid blocking JavaScript threads waiting on write
 //! compression and acquiring the write lock, all writes are sent to a single
 //! writer thread
 //!
 //! This means currently compression runs single-threaded, which is not ideal.
-//! 
+//!
 //! Reads will never lock, and it’s faster to de-compress on the main-thread
 //! than the writer thread, since we avoid both message passing overhead,
 //! waiting on other threads and creating JavaScript promises for the reads.
@@ -47,11 +47,11 @@ use napi::JsUnknown;
 use napi_derive::napi;
 use tracing::Level;
 
-use crate::writer::{
-  DatabaseWriter, DatabaseWriterError, DatabaseWriterHandle, DatabaseWriterMessage,
-  start_make_database_writer,
-};
 use crate::writer::LMDBOptions;
+use crate::writer::{
+  start_make_database_writer, DatabaseWriter, DatabaseWriterError, DatabaseWriterHandle,
+  DatabaseWriterMessage,
+};
 
 pub mod writer;
 
@@ -348,10 +348,10 @@ impl LMDB {
 
 #[cfg(test)]
 mod test {
+  use super::*;
+  use rand::random;
   use std::env::temp_dir;
   use std::sync::mpsc::channel;
-
-  use super::*;
 
   #[test]
   fn create_database() {
@@ -410,5 +410,44 @@ mod test {
     let value = read.get(&read_txn, "key").unwrap().unwrap();
     read_txn.commit().unwrap();
     assert_eq!(value, [1, 2, 3, 4]);
+  }
+
+  #[test]
+  fn test_filling_up_the_database() {
+    let _ = tracing_subscriber::fmt::try_init();
+    let db_path = temp_dir()
+      .join("lmdb-js-lite")
+      .join("test_filling_up_the_database")
+      .join("lmdb-cache-tests.db");
+    tracing::info!("db_path={db_path:?}");
+    let _ = std::fs::remove_dir_all(&db_path);
+    let mut current_size = 10485760;
+    let options = LMDBOptions {
+      path: db_path.to_str().unwrap().to_string(),
+      async_writes: false,
+      map_size: None,
+    };
+    let (_, read) = start_make_database_writer(&options).unwrap();
+
+    // 1MB entry
+    let mut buffer: Vec<u8> = vec![];
+    for _j in 0..(1024 * 1024) {
+      buffer.push(random());
+    }
+    // 1GB writes +/-
+    for i in 0..1024 {
+      let mut write_txn = read.environment().write_txn().unwrap();
+      let error = (|| -> Result<(), DatabaseWriterError> {
+        read.put(&mut write_txn, &format!("{i}"), &buffer)?;
+        write_txn.commit()?;
+        Ok(())
+      })();
+      if let Err(DatabaseWriterError::HeedError(heed::Error::Mdb(heed::MdbError::MapFull))) = error
+      {
+        current_size = current_size * 2;
+        tracing::info!("Resizing database {current_size}");
+        unsafe { read.environment().resize(current_size).unwrap() }
+      }
+    }
   }
 }
